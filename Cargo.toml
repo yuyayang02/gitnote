@@ -1,0 +1,30 @@
+[package]
+name = "gitnote"
+version = "0.1.0"
+edition = "2024"
+default-run = "gitnote"
+
+[dependencies]
+axum = { version = "0.8.4", features = ["json"] }
+
+axum-extra = { version = "0.10.1", default-features = false, features = [
+    "query",
+] }
+
+chrono = "0.4.41"
+git2 = "0.20.2"
+reqwest = { version = "0.12.20", features = ["json", "rustls-tls", "blocking"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+sqlx = { version = "0.8.6", features = [
+    "postgres",
+    "runtime-tokio-rustls",
+    "json",
+    "chrono",
+] }
+thiserror = "2.0.12"
+tokio = { version = "1.45.1", features = ["full"] }
+toml = "0.8.23"
+tower-http = { version = "0.6.6", features = ["trace"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
