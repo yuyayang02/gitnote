@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use serde::Deserialize;
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
+use serde::{Deserialize, Deserializer};
 
 use crate::error::{Error, Result};
 
@@ -8,6 +9,8 @@ use crate::error::{Error, Result};
 pub struct FrontMatter {
     pub title: String,
     pub summary: String,
+    #[serde(deserialize_with = "parse_to_local")]
+    pub datetime: DateTime<Local>,
     pub tags: Vec<String>,
 }
 #[derive(Debug)]
@@ -94,6 +97,37 @@ impl ArticleBuilder {
     }
 }
 
+fn parse_to_local<'de, D>(deserializer: D) -> std::result::Result<DateTime<Local>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+
+    for fmt in &["%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"] {
+        if let Ok(naive_dt) = NaiveDateTime::parse_from_str(&s, fmt) {
+            return Ok(Local
+                .from_local_datetime(&naive_dt)
+                .single()
+                .ok_or_else(|| serde::de::Error::custom("本地时间不明确"))?);
+        }
+    }
+
+    for fmt in &["%Y-%m-%d", "%Y/%m/%d"] {
+        if let Ok(date) = NaiveDate::parse_from_str(&s, fmt) {
+            if let Some(naive_dt) = date.and_hms_opt(0, 0, 0) {
+                return Ok(Local
+                    .from_local_datetime(&naive_dt)
+                    .single()
+                    .ok_or_else(|| serde::de::Error::custom("本地时间不明确"))?);
+            } else {
+                return Err(serde::de::Error::custom("无法构建时间"));
+            }
+        }
+    }
+
+    Err(serde::de::Error::custom(format!("无法解析日期: {}", s)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,6 +147,7 @@ mod tests {
 +++
 title = "Test Article"
 summary = "This is a test summary."
+datetime = "2024-06-01"
 tags = ["rust", "testing"]
 +++
 
@@ -128,10 +163,20 @@ This is the body of the article.
         assert_eq!(article.group, "group-a");
         assert_eq!(article.slug, "test-article");
         assert_eq!(article.frontmatter.title, "Test Article");
-        assert_eq!(article.frontmatter.summary, "This is a test summary.");
         assert_eq!(article.frontmatter.tags, vec!["rust", "testing"]);
 
         // 校验渲染内容
+        assert!(
+            article.frontmatter.summary.contains("<rendered>"),
+            "Rendered summary should wrap with <rendered> tag"
+        );
+        assert!(
+            article
+                .frontmatter
+                .summary
+                .contains("This is a test summary."),
+            "summary should be included"
+        );
         assert!(
             article.rendered_content.contains("<rendered>"),
             "Rendered content should wrap with <rendered> tag"

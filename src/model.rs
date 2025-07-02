@@ -39,17 +39,21 @@ impl ArticleModel {
     pub async fn upsert<'c>(
         tx: &mut sqlx::PgTransaction<'c>,
         article: Article,
-        datetime: DateTime<Local>,
+        updated_at: DateTime<Local>,
     ) -> Result<()> {
         sqlx::query(
             "
             INSERT INTO articles
-            (slug, group_path, title, summary, tags, content, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                (slug, group_path, title, summary, tags, content, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (group_path, slug)
             DO UPDATE SET
-              group_path = $2, title = $3, summary = $4, 
-              tags = $5, content = $6, updated_at = $7
+                group_path = $2,
+                title = $3,
+                summary = $4,
+                tags = $5,
+                content = $6,
+                updated_at = $8
             ",
         )
         .bind(&article.slug)
@@ -58,7 +62,8 @@ impl ArticleModel {
         .bind(&article.frontmatter.summary)
         .bind(&article.frontmatter.tags)
         .bind(&article.rendered_content)
-        .bind(datetime)
+        .bind(&article.frontmatter.datetime)
+        .bind(updated_at)
         .execute(tx.as_mut())
         .await?;
 

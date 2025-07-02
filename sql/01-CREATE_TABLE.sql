@@ -5,6 +5,7 @@ CREATE TABLE articles (
     summary TEXT NOT NULL,                     -- 摘要，可为 front matter 或正文提取
     tags TEXT[] NOT NULL,                        -- 可用逗号分隔，或用 JSON 存储
     content TEXT NOT NULL,            -- Markdown 正文内容
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,    -- Git commit 时间或推送时间
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL,    -- Git commit 时间或推送时间
 
     UNIQUE (group_path, slug)               -- 每组中文件唯一
