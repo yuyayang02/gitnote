@@ -36,8 +36,8 @@ impl OpenGitBareRepository {
     /// 返回值中包括 `.gitnote.toml` 和 `.md` 文件的新增/删除/变更
     fn diff_commits(
         &self,
-        parent_commit: Option<Commit>,
-        commit: Commit,
+        parent_commit: Option<&Commit>,
+        commit: &Commit,
     ) -> Result<Vec<RepoEntry>> {
         let tree = commit.tree()?; // 新提交的文件快照（Tree）
         let parent_tree: Option<git2::Tree<'_>> = parent_commit.map(|c| c.tree()).transpose()?; // 旧提交的 Tree（如有）
@@ -174,7 +174,7 @@ impl OpenGitBareRepository {
             .ok();
         let commit = repo.find_commit(git2::Oid::from_str(new_commit.as_ref())?)?;
 
-        self.diff_commits(parent_commit, commit)
+        self.diff_commits(parent_commit.as_ref(), &commit)
     }
 
     /// 获取当前仓库最新两次提交之间的差异（HEAD 与其父）
@@ -183,7 +183,32 @@ impl OpenGitBareRepository {
         let commit = self.repo().head()?.peel_to_commit()?; // 当前 HEAD
         let parent_commit = commit.parent(0).ok(); // 父提交（若有）
 
-        self.diff_commits(parent_commit, commit)
+        self.diff_commits(parent_commit.as_ref(), &commit)
+    }
+
+    /// Rebuild 整个历史（从最早 commit 开始重放所有变更）
+    /// 返回按时间顺序的所有语义化 RepoEntry 流
+    pub fn rebuild_all(&self) -> Result<Vec<RepoEntry>>   {
+        let mut revwalk = self.repo().revwalk()?;
+        revwalk.push_head()?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::REVERSE)?;
+
+        let mut prev_commit: Option<Commit> = None;
+
+        let entries = revwalk
+            .filter_map(|oid_result| {
+                let oid = oid_result.ok()?;
+                let commit = self.repo().find_commit(oid).ok()?;
+
+                let diff = self.diff_commits(prev_commit.as_ref(), &commit).ok()?;
+                prev_commit = Some(commit);
+
+                Some(diff)
+            })
+            .flatten()
+            .collect();
+
+        Ok(entries)
     }
 }
 
@@ -227,7 +252,42 @@ mod tests {
             println!("{:?}", entry);
         }
     }
+    #[test]
+    fn test_rebuild_all() {
+        let repo = open_repo().open("main").expect("Failed to open repo");
 
+        // 调用 rebuild_all 获取历史语义变更流
+        let entries = repo.rebuild_all().expect("Failed to rebuild entries");
+
+        // 输出结果（仅调试打印）
+        for entry in entries {
+            match entry {
+                RepoEntry::GitNote { group, content } => {
+                    println!("[GitNote] group: {:?}, content: {}", group, content);
+                }
+                RepoEntry::RemoveGitNote { group } => {
+                    println!("[RemoveGitNote] group: {:?}", group);
+                }
+                RepoEntry::File {
+                    group,
+                    name,
+                    datetime,
+                    content,
+                } => {
+                    println!(
+                        "[File] group: {:?}, name: {}, time: {}, len: {}",
+                        group,
+                        name,
+                        datetime,
+                        content.len()
+                    );
+                }
+                RepoEntry::RemoveFile { group, name } => {
+                    println!("[RemoveFile] group: {:?}, name: {}", group, name);
+                }
+            }
+        }
+    }
     #[test]
     fn test_is_markdown_file() {
         use std::path::Path;

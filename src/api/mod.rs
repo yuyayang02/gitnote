@@ -31,6 +31,7 @@ impl App {
 
 pub async fn run_server(app: App) {
     let router = Router::new()
+        .route("/repo/rebuild/{branch}", post(git_repo::git_repo_rebuild))
         .route("/repo/update", post(git_repo::git_repo_update))
         .route("/articles", get(query::articles_list))
         .route("/articles/{slug}", get(query::articles_get_one))

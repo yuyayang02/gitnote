@@ -36,6 +36,20 @@ pub struct ArticleListItem {
 pub struct ArticleModel;
 
 impl ArticleModel {
+    pub async fn reset_all<'c>(tx: &mut sqlx::PgTransaction<'c>) -> Result<()> {
+        sqlx::query(
+            "
+                WITH deleted_articles AS (
+                    DELETE FROM articles RETURNING 1
+                )
+                DELETE FROM groups
+                ",
+        )
+        .execute(tx.as_mut())
+        .await?;
+        Ok(())
+    }
+
     pub async fn upsert<'c>(
         tx: &mut sqlx::PgTransaction<'c>,
         article: Article,

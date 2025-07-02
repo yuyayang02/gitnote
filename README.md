@@ -55,3 +55,8 @@ visible = true
 +++
 
 正文内容……
+
+
+## 🚧 Future Plans
+
+- 将 `rebuild` 功能重构为后台异步任务，支持任务状态跟踪和异步触发。

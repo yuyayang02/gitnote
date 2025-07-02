@@ -23,7 +23,7 @@ chmod +x "/home/${GIT_USER}/gitnote"
 # 初始化裸仓库（如果不存在）
 REPO_PATH="/home/${GIT_USER}/${REPO_NAME}"
 if [ ! -d "$REPO_PATH" ]; then
-  git init --bare "$REPO_PATH"
+  git init --bare --initial-branch=main "$REPO_PATH"
   chown -R "${GIT_USER}:${GIT_USER}" "$REPO_PATH"
 else
   echo "Repository $REPO_PATH already exists, skipping initialization."
