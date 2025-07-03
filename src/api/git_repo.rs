@@ -1,8 +1,4 @@
-use axum::{
-    Json, Router,
-    extract::{Path, State},
-    routing::post,
-};
+use axum::{Json, Router, extract::State, routing::post};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
@@ -13,22 +9,19 @@ use crate::{
 
 pub fn setup_route() -> Router<App> {
     Router::new()
-        .route("/repo/rebuild/{branch}", post(git_repo_rebuild))
+        .route("/repo/rebuild", post(git_repo_rebuild))
         .route("/repo/update", post(git_repo_update))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GitRefUpdate {
-    pub refname: String,
+    // pub refname: String,
     pub oldrev: String,
     pub newrev: String,
 }
 
-async fn git_repo_rebuild(
-    Path(branch): Path<String>,
-    State(app): State<App>,
-) -> Result<StatusCode> {
-    let repo = app.repo.open(branch)?;
+async fn git_repo_rebuild(State(app): State<App>) -> Result<StatusCode> {
+    let repo = app.repo.open()?;
 
     let entries = repo.rebuild_all()?;
     let mut tx = app.db.begin().await?;
@@ -53,10 +46,16 @@ async fn git_repo_rebuild(
 async fn git_repo_update(
     State(app): State<App>,
     Json(data): Json<GitRefUpdate>,
-) -> Result<StatusCode> {
-    let repo = app.repo.open(data.refname)?;
+) -> Result<(StatusCode, String)> {
+    let repo = app.repo.open()?;
 
     let entries = repo.diff_commits_from_str(data.oldrev, data.newrev)?;
+
+    let resp_str = entries
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
 
     // 开启db事务
     let mut tx = app.db.begin().await?;
@@ -64,7 +63,8 @@ async fn git_repo_update(
     match process_repo_entries(&mut tx, entries, &app).await {
         Ok(_) => {
             tx.commit().await?;
-            Ok(StatusCode::OK)
+
+            Ok((StatusCode::OK, resp_str))
         }
 
         Err(e) => {

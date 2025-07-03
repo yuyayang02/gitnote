@@ -3,7 +3,7 @@ use std::path::Path;
 use chrono::{Local, TimeZone};
 use git2::{Commit, Delta, Oid, Repository};
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 use super::entry::RepoEntry;
 
@@ -188,7 +188,7 @@ impl OpenGitBareRepository {
 
     /// Rebuild 整个历史（从最早 commit 开始重放所有变更）
     /// 返回按时间顺序的所有语义化 RepoEntry 流
-    pub fn rebuild_all(&self) -> Result<Vec<RepoEntry>>   {
+    pub fn rebuild_all(&self) -> Result<Vec<RepoEntry>> {
         let mut revwalk = self.repo().revwalk()?;
         revwalk.push_head()?;
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::REVERSE)?;
@@ -217,12 +217,7 @@ impl GitBareRepository {
         Self(name.into())
     }
 
-    pub fn open(&self, refname: impl AsRef<str>) -> Result<OpenGitBareRepository> {
-        let refname = refname.as_ref();
-        // 非main分支返回错误
-        if !refname.contains("main") {
-            return Err(Error::InvaildBranch(refname.to_string()));
-        }
+    pub fn open(&self) -> Result<OpenGitBareRepository> {
         let repo = git2::Repository::open_bare(self.0.as_str())?;
         Ok(OpenGitBareRepository(repo))
     }
@@ -246,7 +241,7 @@ mod tests {
     #[test]
     fn test_diff_last_tow_commit() {
         let repo = open_repo();
-        let entries = repo.open("main").unwrap().diff_last_two_commits().unwrap();
+        let entries = repo.open().unwrap().diff_last_two_commits().unwrap();
         assert!(!entries.is_empty(), "应该检测到新提交的变动");
         for entry in entries {
             println!("{:?}", entry);
@@ -254,38 +249,14 @@ mod tests {
     }
     #[test]
     fn test_rebuild_all() {
-        let repo = open_repo().open("main").expect("Failed to open repo");
+        let repo = open_repo().open().expect("Failed to open repo");
 
         // 调用 rebuild_all 获取历史语义变更流
         let entries = repo.rebuild_all().expect("Failed to rebuild entries");
 
         // 输出结果（仅调试打印）
         for entry in entries {
-            match entry {
-                RepoEntry::GitNote { group, content } => {
-                    println!("[GitNote] group: {:?}, content: {}", group, content);
-                }
-                RepoEntry::RemoveGitNote { group } => {
-                    println!("[RemoveGitNote] group: {:?}", group);
-                }
-                RepoEntry::File {
-                    group,
-                    name,
-                    datetime,
-                    content,
-                } => {
-                    println!(
-                        "[File] group: {:?}, name: {}, time: {}, len: {}",
-                        group,
-                        name,
-                        datetime,
-                        content.len()
-                    );
-                }
-                RepoEntry::RemoveFile { group, name } => {
-                    println!("[RemoveFile] group: {:?}, name: {}", group, name);
-                }
-            }
+            println!("{}", entry)
         }
     }
     #[test]

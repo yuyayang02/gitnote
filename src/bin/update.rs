@@ -28,6 +28,14 @@ fn main() {
         print_usage_and_exit();
     }
 
+    const DEFAULT_REFNAME: &'static str = "refs/heads/main";
+
+    // ✅ 只处理 main 分支的推送
+    if refname != DEFAULT_REFNAME {
+        println!("ℹ️ Skipping update hook: ref '{}' is not 'main'", refname);
+        return;
+    }
+
     let client = reqwest::blocking::Client::new();
     let res = client
         .post(UPDATE_API)
@@ -41,11 +49,15 @@ fn main() {
     match res {
         Ok(resp) => {
             let status = resp.status();
+            let text = resp.text().unwrap_or_default();
             if !status.is_success() {
                 // 获取 body 内容并输出
-                let text = resp.text().unwrap_or_default();
-                eprintln!("❌ Push rejected:\nStatus: {}\nMessage: {}", status, text);
+                eprintln!("❌ Push rejected");
+                eprintln!("{} | {}", status, text.trim());
                 std::process::exit(1);
+            } else {
+                println!("✅ Push successful");
+                println!("{}", text.trim());
             }
         }
         Err(e) => {

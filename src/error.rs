@@ -14,9 +14,8 @@ pub enum Error {
     #[error(transparent)]
     Repository(#[from] git2::Error),
 
-    #[error("Invalid branch: {0}")]
-    InvaildBranch(String),
-
+    // #[error("Invalid branch: {0}")]
+    // InvaildBranch(String),
     #[error(transparent)]
     Serde(#[from] toml::de::Error),
 
@@ -57,10 +56,7 @@ impl IntoResponse for Error {
             Error::FormatError(s) => (StatusCode::BAD_REQUEST, s.to_string()).into_response(),
 
             Error::Serde(e) => (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
-
-
-            Error::InvaildBranch(e) => (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
-
+            // Error::InvaildBranch(e) => (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
         }
     }
 }
