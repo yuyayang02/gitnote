@@ -1,10 +1,19 @@
 use crate::api::App;
 use crate::error::{ApiError, Result};
 use crate::model::ArticleModel;
-use axum::Json;
 use axum::extract::{Path, State};
+use axum::routing::get;
+use axum::{Json, Router};
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
+
+pub fn setup_route() -> Router<App> {
+    Router::new()
+        .route("/articles", get(articles_list))
+        .route("/articles/{slug}", get(articles_get_one))
+        .route("/tags", get(articles_tags))
+        .route("/categories", get(articels_categories))
+}
 
 #[derive(Debug, Serialize)]
 pub struct ArticleMeta {
@@ -36,7 +45,7 @@ pub struct Author {
     name: String,
 }
 
-pub async fn articles_get_one(
+async fn articles_get_one(
     Path(slug): Path<String>,
     State(app): State<App>,
 ) -> Result<Json<ArticleFull>> {
@@ -61,11 +70,11 @@ pub async fn articles_get_one(
     }))
 }
 
-pub async fn articles_tags(State(app): State<App>) -> Result<Json<Vec<String>>> {
+async fn articles_tags(State(app): State<App>) -> Result<Json<Vec<String>>> {
     ArticleModel::tags(app.db.as_ref()).await.map(|r| Json(r))
 }
 
-pub async fn articels_categories(State(app): State<App>) -> Result<Json<Vec<Category>>> {
+async fn articels_categories(State(app): State<App>) -> Result<Json<Vec<Category>>> {
     ArticleModel::categories(app.db.as_ref()).await.map(|a| {
         Json(
             a.into_iter()
@@ -97,7 +106,7 @@ impl Default for QueryParams {
     }
 }
 
-pub async fn articles_list(
+async fn articles_list(
     Query(params): Query<QueryParams>,
     State(app): State<App>,
 ) -> Result<Json<Vec<ArticleMeta>>> {

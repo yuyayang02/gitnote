@@ -4,10 +4,7 @@ mod query;
 
 use std::sync::Arc;
 
-use axum::{
-    Router,
-    routing::{get, post},
-};
+use axum::Router;
 use tower_http::trace::TraceLayer;
 
 use crate::{db::Db, github_render::GithubAPiRenderer, repo::GitBareRepository};
@@ -31,12 +28,7 @@ impl App {
 
 pub async fn run_server(app: App) {
     let router = Router::new()
-        .route("/repo/rebuild/{branch}", post(git_repo::git_repo_rebuild))
-        .route("/repo/update", post(git_repo::git_repo_update))
-        .route("/articles", get(query::articles_list))
-        .route("/articles/{slug}", get(query::articles_get_one))
-        .route("/tags", get(query::articles_tags))
-        .route("/categories", get(query::articels_categories))
+        .nest("/api", git_repo::setup_route().merge(query::setup_route()))
         .with_state(app);
 
     let router = add_middlewares(router);

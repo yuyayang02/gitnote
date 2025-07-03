@@ -1,6 +1,7 @@
 use axum::{
-    Json,
+    Json, Router,
     extract::{Path, State},
+    routing::post,
 };
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -10,6 +11,12 @@ use crate::{
     repo::RepoEntry,
 };
 
+pub fn setup_route() -> Router<App> {
+    Router::new()
+        .route("/repo/rebuild/{branch}", post(git_repo_rebuild))
+        .route("/repo/update", post(git_repo_update))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GitRefUpdate {
     pub refname: String,
@@ -17,7 +24,7 @@ pub struct GitRefUpdate {
     pub newrev: String,
 }
 
-pub async fn git_repo_rebuild(
+async fn git_repo_rebuild(
     Path(branch): Path<String>,
     State(app): State<App>,
 ) -> Result<StatusCode> {
@@ -35,7 +42,7 @@ pub async fn git_repo_rebuild(
             Ok(StatusCode::OK)
         }
 
-        Err(e) => { 
+        Err(e) => {
             tx.rollback().await.ok();
             tracing::error!(?e);
             Err(e)
@@ -43,7 +50,7 @@ pub async fn git_repo_rebuild(
     }
 }
 
-pub async fn git_repo_update(
+async fn git_repo_update(
     State(app): State<App>,
     Json(data): Json<GitRefUpdate>,
 ) -> Result<StatusCode> {
