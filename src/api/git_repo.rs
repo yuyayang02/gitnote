@@ -53,11 +53,13 @@ async fn git_repo_update(
 
     let entries = repo.diff_commits_from_str(data.oldrev, data.newrev)?;
 
+    // 构造最终输出字符串：将 RepoEntry 项逐个格式化为字符串后连接成完整输出
     let resp_str = entries
-        .iter()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>()
-        .join("\n");
+        .iter() // 遍历 RepoEntry 的迭代器（原始顺序）
+        .rev() // 反转迭代顺序，使得较新的条目显示在最下方（由旧到新）
+        .map(|s| s.to_string()) // 将每个 RepoEntry 格式化为 String（通过实现的 Display trait）
+        .collect::<Vec<_>>() // 收集为一个 String 向量（每行一个）
+        .join("\n"); // 使用换行符将每个字符串拼接为最终输出
 
     // 开启db事务
     let mut tx = app.db.begin().await?;
