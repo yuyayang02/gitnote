@@ -11,8 +11,8 @@ pub fn setup_route() -> Router<App> {
     Router::new()
         .route("/articles", get(articles_list))
         .route("/articles/{slug}", get(articles_get_one))
-        .route("/tags", get(articles_tags))
-        .route("/categories", get(articels_categories))
+        .route("/articles/tags", get(articles_tags))
+        .route("/articles/categories", get(articels_categories))
 }
 
 #[derive(Debug, Serialize)]
