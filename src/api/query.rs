@@ -24,6 +24,7 @@ pub struct ArticleMeta {
     pub category: Option<Category>,
     pub author: Option<Author>,
     pub updated_at: i64,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,6 +66,7 @@ async fn articles_get_one(
                 .map(|(id, name)| Category { id, name }),
             author: article.author_name.map(|name| Author { name }),
             updated_at: article.updated_at.timestamp_millis(),
+            created_at: article.created_at.timestamp_millis(),
         },
         content: article.content,
     }))
@@ -133,6 +135,7 @@ async fn articles_list(
                         .map(|(id, name)| Category { id, name }),
                     author: a.author_name.map(|name| Author { name }),
                     updated_at: a.updated_at.timestamp_millis(),
+                    created_at: a.created_at.timestamp_millis(),
                 })
                 .collect()
         })?,

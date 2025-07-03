@@ -253,7 +253,7 @@ mod tests {
 
         // 调用 rebuild_all 获取历史语义变更流
         let entries = repo.rebuild_all().expect("Failed to rebuild entries");
-
+        
         // 输出结果（仅调试打印）
         for entry in entries {
             println!("{}", entry)

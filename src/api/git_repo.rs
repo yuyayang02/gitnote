@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use axum::{Json, Router, extract::State, routing::post};
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -80,6 +82,13 @@ async fn process_repo_entries<'c>(
     entries: Vec<RepoEntry>,
     app: &App,
 ) -> Result<StatusCode> {
+    fn slug_from_filename(filename: String) -> String {
+        Path::new(&filename)
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or(filename)
+    }
+
     for entry in entries {
         match entry {
             RepoEntry::GitNote { group, content } => {
@@ -98,15 +107,17 @@ async fn process_repo_entries<'c>(
                 datetime,
                 content,
             } => {
-                let article = ArticleBuilder::new(group.to_string_lossy(), name, content)
-                    .build_with_renderer(&app.renderer)
-                    .await?;
+                let article =
+                    ArticleBuilder::new(group.to_string_lossy(), slug_from_filename(name), content)
+                        .build_with_renderer(&app.renderer)
+                        .await?;
 
                 ArticleModel::upsert(&mut tx, article, datetime).await?;
             }
 
             RepoEntry::RemoveFile { group, name } => {
-                ArticleModel::remove(&mut tx, name, group.to_string_lossy()).await?;
+                ArticleModel::remove(&mut tx, group.to_string_lossy(), slug_from_filename(name))
+                    .await?;
             }
         }
     }

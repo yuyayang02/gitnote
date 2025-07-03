@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
 use serde::{Deserialize, Deserializer};
 
@@ -37,20 +35,16 @@ pub trait Renderer {
 impl ArticleBuilder {
     pub fn new(
         group: impl Into<String>,
-        name: impl Into<String>,
+        slug: impl Into<String>,
         md_content: impl Into<String>,
     ) -> Self {
         // 去除文件扩展名
-        let name: String = name.into();
-        let slug: String = if let Some(s) = Path::new(&name).file_stem() {
-            s.to_string_lossy().into()
-        } else {
-            name
-        };
+        // let name: String = slug.into();
+
 
         Self {
             group: group.into(),
-            slug,
+            slug: slug.into(),
             md_content: md_content.into(),
         }
     }

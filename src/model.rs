@@ -11,6 +11,7 @@ pub struct ArticleDetail {
     pub summary: String,
     pub tags: Vec<String>,
     pub updated_at: DateTime<Local>,
+    pub created_at: DateTime<Local>,
     pub content: String,
 
     // 平铺字段
@@ -26,6 +27,7 @@ pub struct ArticleListItem {
     pub summary: String,
     pub tags: Vec<String>,
     pub updated_at: DateTime<Local>,
+    pub created_at: DateTime<Local>,
 
     // 平铺字段
     pub category_id: Option<String>,
@@ -86,8 +88,8 @@ impl ArticleModel {
 
     pub async fn remove<'c>(
         tx: &mut sqlx::PgTransaction<'c>,
-        slug: impl AsRef<str>,
         group: impl AsRef<str>,
+        slug: impl AsRef<str>,
     ) -> Result<()> {
         sqlx::query("DELETE FROM articles WHERE slug = $1 AND group_path = $2")
             .bind(slug.as_ref())
@@ -133,6 +135,7 @@ impl ArticleModel {
                     a.tags,
                     a.content,
                     a.updated_at,
+                    a.created_at,
                     g.category ->> 'id' AS category_id,
                     g.category ->> 'name' AS category_name,
                     g.author ->> 'name' AS author_name
@@ -168,6 +171,7 @@ impl ArticleModel {
                 a.summary,
                 a.tags,
                 a.updated_at,
+                a.created_at,
                 g.category ->> 'id' AS category_id,
                 g.category ->> 'name' AS category_name,
                 g.author ->> 'name' AS author_name
