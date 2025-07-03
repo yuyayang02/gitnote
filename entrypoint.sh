@@ -16,9 +16,13 @@ fi
 
 
 # 移动主程序到 git 用户主目录
-mv /app/gitnote "/home/${GIT_USER}/gitnote"
-chown "${GIT_USER}:${GIT_USER}" "/home/${GIT_USER}/gitnote"
-chmod +x "/home/${GIT_USER}/gitnote"
+if [ ! -f "/home/${GIT_USER}/gitnote" ]; then
+  mv /app/gitnote "/home/${GIT_USER}/gitnote"
+  chown "${GIT_USER}:${GIT_USER}" "/home/${GIT_USER}/gitnote"
+  chmod +x "/home/${GIT_USER}/gitnote"
+else
+  echo "gitnote binary already exists, skipping move."
+fi
 
 # 初始化裸仓库（如果不存在）
 REPO_PATH="/home/${GIT_USER}/${REPO_NAME}"
@@ -53,10 +57,8 @@ chmod 700 "$SSH_DIR"
 chmod 600 "$SSH_DIR/authorized_keys"
 chown -R "${GIT_USER}:${GIT_USER}" "$SSH_DIR"
 
-# 生成 SSH host keys（如果不存在）
-if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
-  ssh-keygen -A
-fi
+# 生成 SSH host keys
+ssh-keygen -A
 
 # 写入 sshd_config
 cat <<EOF > /etc/ssh/sshd_config
