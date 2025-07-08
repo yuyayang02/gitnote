@@ -13,9 +13,9 @@ use tracing_subscriber::{EnvFilter, fmt::time::ChronoLocal};
 
 pub async fn run() {
     tracing_subscriber::fmt()
-        // .with_target(false)
+        .with_target(false)
         .with_timer(ChronoLocal::new("%Y-%m-%d %H:%M:%S%.3f".to_string()))
-        .with_env_filter(EnvFilter::new("gitnote=debug,tower_http=debug"))
+        .with_env_filter(EnvFilter::from_env("GITNOTE_LOG"))
         .init();
 
     let app = api::App::new(
