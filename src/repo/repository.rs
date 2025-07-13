@@ -34,7 +34,7 @@ impl OpenGitBareRepository {
     /// - `parent_commit`: 旧提交；若为 None 表示首次提交（空树）
     /// - `commit`: 新提交
     /// 返回值中包括 `.gitnote.toml` 和 `.md` 文件的新增/删除/变更
-    fn diff_commits(
+    fn compute_commit_diff(
         &self,
         old_commit: Option<&Commit>,
         new_commit: &Commit,
@@ -159,31 +159,60 @@ impl OpenGitBareRepository {
         Ok(entries)
     }
 
-    /// 外部入口：从字符串形式的 commit hash 比较两个提交
-    /// - 若旧 hash 解析失败则返回 None，从而触发首次提交的处理逻辑
-    pub fn diff_commits_from_str(
+    pub fn diff_commits(
         &self,
-        old_commit: impl AsRef<str>,
-        new_commit: impl AsRef<str>,
+        old_commit: Option<&Commit>,
+        new_commit: &Commit,
     ) -> Result<Vec<RepoEntry>> {
         let repo = self.repo();
 
-        // 允许旧提交解析失败（例如全 0 hash），此时作为首次提交处理
-        let old_commit = repo
-            .find_commit(git2::Oid::from_str(old_commit.as_ref())?)
-            .ok();
-        let new_commit = repo.find_commit(git2::Oid::from_str(new_commit.as_ref())?)?;
+        // 获取旧提交的 Oid，如果有的话
+        let old_oid = old_commit.map(|c| c.id());
 
-        self.diff_commits(old_commit.as_ref(), &new_commit)
+        let new_oid = new_commit.id();
+
+        let mut revwalk = repo.revwalk()?;
+        revwalk.push(new_oid)?; // 包含 new_commit
+
+        if let Some(old_oid) = old_oid {
+            revwalk.hide(old_oid)?; // 排除旧提交及其祖先
+        }
+
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::REVERSE)?; // 正序
+
+        let mut prev_commit = old_commit.cloned();
+
+        let entries = revwalk
+            .filter_map(|oid_result| {
+                let oid = oid_result.ok()?;
+                let commit = self.repo().find_commit(oid).ok()?;
+
+                let diff = self
+                    .compute_commit_diff(prev_commit.as_ref(), &commit)
+                    .ok()?;
+                prev_commit = Some(commit);
+
+                Some(diff)
+            })
+            .flatten()
+            .collect();
+
+        Ok(entries)
     }
 
-    /// 获取当前仓库最新两次提交之间的差异（HEAD 与其父）
-    #[allow(unused)]
-    pub fn diff_last_two_commits(&self) -> Result<Vec<RepoEntry>> {
-        let commit = self.repo().head()?.peel_to_commit()?; // 当前 HEAD
-        let parent_commit = commit.parent(0).ok(); // 父提交（若有）
+    pub fn diff_commits_from_str(
+        &self,
+        old_commit_str: impl AsRef<str>,
+        new_commit_str: impl AsRef<str>,
+    ) -> Result<Vec<RepoEntry>> {
+        let repo = self.repo();
 
-        self.diff_commits(parent_commit.as_ref(), &commit)
+        let old_commit = repo
+            .find_commit(Oid::from_str(old_commit_str.as_ref())?)
+            .ok();
+        let new_commit = repo.find_commit(Oid::from_str(new_commit_str.as_ref())?)?;
+
+        self.diff_commits(old_commit.as_ref(), &new_commit)
     }
 
     /// Rebuild 整个历史（从最早 commit 开始重放所有变更）
@@ -200,7 +229,9 @@ impl OpenGitBareRepository {
                 let oid = oid_result.ok()?;
                 let commit = self.repo().find_commit(oid).ok()?;
 
-                let diff = self.diff_commits(prev_commit.as_ref(), &commit).ok()?;
+                let diff = self
+                    .compute_commit_diff(prev_commit.as_ref(), &commit)
+                    .ok()?;
                 prev_commit = Some(commit);
 
                 Some(diff)
@@ -239,21 +270,59 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_last_tow_commit() {
-        let repo = open_repo();
-        let entries = repo.open().unwrap().diff_last_two_commits().unwrap();
-        assert!(!entries.is_empty(), "应该检测到新提交的变动");
-        for entry in entries {
-            println!("{:?}", entry);
+    fn test_diff_commit_range() {
+        let repo = open_repo().open().expect("Failed to open repo");
+
+        // 获取最新提交（HEAD）
+        let head_commit = repo
+            .repo()
+            .head()
+            .and_then(|h| h.peel_to_commit())
+            .expect("Failed to get HEAD commit");
+
+        // 获取其父提交（作为旧提交）
+        let parent_commit = head_commit.parent(0).expect("HEAD has no parent commit");
+
+        // 你也可以手动指定 commit hash 来对比特定范围
+        let old_commit_hash = parent_commit.id().to_string();
+        // let old_commit_hash = "0000000000000000000000000000000000000000".to_string();
+        let new_commit_hash = head_commit.id().to_string();
+
+        println!("Diff range: {} → {}", old_commit_hash, new_commit_hash);
+
+        let entries = repo
+            .diff_commits_from_str(&old_commit_hash, &new_commit_hash)
+            .expect("Failed to diff commit range");
+
+        // 打印变更记录
+        for entry in &entries {
+            if let RepoEntry::File {
+                group: _,
+                name: _,
+                datetime,
+                content: _,
+            } = entry
+            {
+                println!("{} | datetime={}", entry, datetime);
+            } else {
+                println!("{}", entry);
+            }
         }
+
+        // 至少断言有结果（或者根据需要断言具体行为）
+        assert!(
+            !entries.is_empty(),
+            "Expected some diff entries between commits"
+        );
     }
+
     #[test]
     fn test_rebuild_all() {
         let repo = open_repo().open().expect("Failed to open repo");
 
         // 调用 rebuild_all 获取历史语义变更流
         let entries = repo.rebuild_all().expect("Failed to rebuild entries");
-        
+
         // 输出结果（仅调试打印）
         for entry in entries {
             println!("{}", entry)
