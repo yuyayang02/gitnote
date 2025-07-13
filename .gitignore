@@ -2,5 +2,6 @@
 gitnote.git
 /content
 
-ssh_keys/authorized_keys
+authorized_keys
 /.cargo
+.env
