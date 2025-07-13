@@ -8,55 +8,60 @@ use crate::error::Result;
 use super::entry::RepoEntry;
 
 pub struct GitBareRepository(String);
-
+/// 表示一个打开的 Git bare 仓库（只读），用于处理笔记文件变更等语义化操作。
 pub struct OpenGitBareRepository(Repository);
 
 impl OpenGitBareRepository {
-    /// `.gitnote.toml` 配置文件的标准文件名
+    /// `.gitnote.toml` 配置文件的标准文件名（用于识别配置文件）
     const GITNOTE_FILENAME: &'static str = ".gitnote.toml";
 
-    /// 内部封装的 Git 仓库对象引用（只读）
+    /// 获取内部封装的 Git 仓库对象引用
     #[inline]
     fn repo(&self) -> &Repository {
         &self.0
     }
 
-    /// 通过 Oid 读取 Blob 内容并以 UTF-8 字符串返回（若失败则返回 None）
+    /// 通过对象 ID（Oid）读取对应 Blob 内容，并尝试将其解析为 UTF-8 字符串。
+    /// 失败（如找不到、非 UTF-8 编码）时返回 None。
     fn read_blob(&self, oid: Oid) -> Option<String> {
         let blob = self.repo().find_blob(oid).ok()?;
-
         std::str::from_utf8(blob.content())
             .ok()
             .map(|s| s.to_string())
     }
 
-    /// 计算两个提交之间的差异，生成语义化的数据流（RepoEntry）
-    /// - `parent_commit`: 旧提交；若为 None 表示首次提交（空树）
-    /// - `commit`: 新提交
-    /// 返回值中包括 `.gitnote.toml` 和 `.md` 文件的新增/删除/变更
+    /// 比较两个 Git 提交之间的差异，返回语义化的变更列表（RepoEntry）。
+    ///
+    /// 参数：
+    /// - `old_commit`: 可选的旧提交；若为 `None`，则视为空树（首次提交）。
+    /// - `new_commit`: 新提交。
+    ///
+    /// 返回：
+    /// - 所有 `.gitnote.toml` 和 `.md` 文件的新增、删除、修改的变更项。
     fn compute_commit_diff(
         &self,
         old_commit: Option<&Commit>,
         new_commit: &Commit,
     ) -> Result<Vec<RepoEntry>> {
-        let tree = new_commit.tree()?; // 新提交的文件快照（Tree）
-        let parent_tree: Option<git2::Tree<'_>> = old_commit.map(|c| c.tree()).transpose()?; // 旧提交的 Tree（如有）
+        // 获取新旧 Tree（树）对象
+        let tree = new_commit.tree()?; // 新提交对应的 Tree
+        let parent_tree: Option<git2::Tree<'_>> = old_commit.map(|c| c.tree()).transpose()?; // 旧 Tree（如有）
 
         let mut entries = Vec::new();
 
-        // Git 树之间差异（如 git diff），支持 old_tree=None => 等价于空树
+        // 比较两个 Tree 的差异（相当于 git diff）
         let diff = self
             .repo()
             .diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)?;
 
-        // 遍历差异文件列表（Delta 表示单个文件的变化记录）
+        // 遍历每个差异文件（delta）
         diff.foreach(
             &mut |delta, _| {
                 let old_file = delta.old_file();
                 let new_file = delta.new_file();
 
                 match delta.status() {
-                    // 新增文件：检测是 GitNote 还是文章
+                    // 新增文件：检测是否为 GitNote 配置或 Markdown 文章
                     Delta::Added => {
                         if let Some(path) = new_file.path() {
                             if path.ends_with(Self::GITNOTE_FILENAME) {
@@ -77,7 +82,7 @@ impl OpenGitBareRepository {
                                             .to_string(),
                                         datetime: Local
                                             .timestamp_opt(new_commit.time().seconds(), 0)
-                                            .unwrap(), // 用提交时间作为文章时间戳
+                                            .unwrap(),
                                         content,
                                     });
                                 }
@@ -85,7 +90,7 @@ impl OpenGitBareRepository {
                         }
                     }
 
-                    // 删除文件：生成 RemoveGitNote 或 RemoveFile
+                    // 删除文件：记录删除动作
                     Delta::Deleted => {
                         if let Some(path) = old_file.path() {
                             if path.ends_with(Self::GITNOTE_FILENAME) {
@@ -101,7 +106,7 @@ impl OpenGitBareRepository {
                         }
                     }
 
-                    // 修改、重命名、复制：先删后增（保守策略）
+                    // 修改、重命名、复制等变化：保守策略是先删后增
                     Delta::Modified | Delta::Renamed | Delta::Copied => {
                         // 删除旧文件
                         if let Some(path) = old_file.path() {
@@ -145,20 +150,24 @@ impl OpenGitBareRepository {
                         }
                     }
 
-                    // 其他状态忽略（如未变）
+                    // 其他状态忽略（如 Unmodified、Ignored、Conflicted）
                     _ => {}
                 }
 
-                true // 继续遍历下一个文件 delta
+                true // 继续处理下一个文件
             },
             None,
             None,
-            None, // 仅使用文件级遍历（无差异内容比较）
+            None, // 只关心文件级差异，不处理 diff 内容
         )?;
 
         Ok(entries)
     }
 
+    /// 获取从 `old_commit` 到 `new_commit` 之间的所有变更（语义化 RepoEntry 列表）。
+    ///
+    /// - 如果 `old_commit` 为 `None`，则表示从空树开始构建（即重建整个历史）。
+    /// - 该方法自动使用 Git 的 revwalk（拓扑排序 + 正序）处理多提交差异。
     pub fn diff_commits(
         &self,
         old_commit: Option<&Commit>,
@@ -166,22 +175,20 @@ impl OpenGitBareRepository {
     ) -> Result<Vec<RepoEntry>> {
         let repo = self.repo();
 
-        // 获取旧提交的 Oid，如果有的话
         let old_oid = old_commit.map(|c| c.id());
-
         let new_oid = new_commit.id();
 
+        // 设置 revwalk：从 new_oid 开始，排除 old_oid 及其祖先
         let mut revwalk = repo.revwalk()?;
-        revwalk.push(new_oid)?; // 包含 new_commit
-
+        revwalk.push(new_oid)?;
         if let Some(old_oid) = old_oid {
-            revwalk.hide(old_oid)?; // 排除旧提交及其祖先
+            revwalk.hide(old_oid)?;
         }
-
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::REVERSE)?; // 正序
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::REVERSE)?; // 按拓扑 + 正序
 
         let mut prev_commit = old_commit.cloned();
 
+        // 依次比较每个提交之间的变化
         let entries = revwalk
             .filter_map(|oid_result| {
                 let oid = oid_result.ok()?;
@@ -200,6 +207,7 @@ impl OpenGitBareRepository {
         Ok(entries)
     }
 
+    /// 提供字符串形式的提交 ID 比较差异（封装 `diff_commits` 的便捷入口）。
     pub fn diff_commits_from_str(
         &self,
         old_commit_str: impl AsRef<str>,
@@ -215,31 +223,12 @@ impl OpenGitBareRepository {
         self.diff_commits(old_commit.as_ref(), &new_commit)
     }
 
-    /// Rebuild 整个历史（从最早 commit 开始重放所有变更）
-    /// 返回按时间顺序的所有语义化 RepoEntry 流
+    /// 重建整个 Git 历史，从初始提交开始回放变更（语义化）。
+    ///
+    /// 本质上是从空树到 `HEAD` 的 `diff_commits`。
     pub fn rebuild_all(&self) -> Result<Vec<RepoEntry>> {
-        let mut revwalk = self.repo().revwalk()?;
-        revwalk.push_head()?;
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::REVERSE)?;
-
-        let mut prev_commit: Option<Commit> = None;
-
-        let entries = revwalk
-            .filter_map(|oid_result| {
-                let oid = oid_result.ok()?;
-                let commit = self.repo().find_commit(oid).ok()?;
-
-                let diff = self
-                    .compute_commit_diff(prev_commit.as_ref(), &commit)
-                    .ok()?;
-                prev_commit = Some(commit);
-
-                Some(diff)
-            })
-            .flatten()
-            .collect();
-
-        Ok(entries)
+        let head = self.repo().head()?.peel_to_commit()?;
+        self.diff_commits(None, &head)
     }
 }
 
