@@ -1,4 +1,4 @@
-const UPDATE_API: &'static str = "http://localhost:3000/api/repo/update";
+const DEFAULT_UPDATE_API: &'static str = "http://localhost:3000/api/repo/update";
 
 fn print_usage_and_exit() -> ! {
     eprintln!("Usage: update <refname> <oldrev> <newrev>");
@@ -35,10 +35,11 @@ fn main() {
         println!("ℹ️ Skipping update hook: ref '{}' is not 'main'", refname);
         return;
     }
+    let update_api = std::env::var("UPDATE_API");
 
     let client = reqwest::blocking::Client::new();
     let res = client
-        .post(UPDATE_API)
+        .post(update_api.as_deref().unwrap_or(DEFAULT_UPDATE_API))
         .json(&serde_json::json!({
             "refname": refname,
             "oldrev": oldrev,
