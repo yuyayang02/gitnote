@@ -1,12 +1,8 @@
 FROM alpine:latest
 
-ENV GIT_USER=git \
-    REPO_NAME=gitnote.git
-
-RUN apk add --no-cache \
-    openssh \
-    git \
-    curl
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+RUN apk update 
+RUN apk add --no-cache git openssh curl
 
 WORKDIR /app
 
