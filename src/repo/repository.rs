@@ -36,11 +36,11 @@ impl OpenGitBareRepository {
     /// 返回值中包括 `.gitnote.toml` 和 `.md` 文件的新增/删除/变更
     fn diff_commits(
         &self,
-        parent_commit: Option<&Commit>,
-        commit: &Commit,
+        old_commit: Option<&Commit>,
+        new_commit: &Commit,
     ) -> Result<Vec<RepoEntry>> {
-        let tree = commit.tree()?; // 新提交的文件快照（Tree）
-        let parent_tree: Option<git2::Tree<'_>> = parent_commit.map(|c| c.tree()).transpose()?; // 旧提交的 Tree（如有）
+        let tree = new_commit.tree()?; // 新提交的文件快照（Tree）
+        let parent_tree: Option<git2::Tree<'_>> = old_commit.map(|c| c.tree()).transpose()?; // 旧提交的 Tree（如有）
 
         let mut entries = Vec::new();
 
@@ -76,7 +76,7 @@ impl OpenGitBareRepository {
                                             .to_string_lossy()
                                             .to_string(),
                                         datetime: Local
-                                            .timestamp_opt(commit.time().seconds(), 0)
+                                            .timestamp_opt(new_commit.time().seconds(), 0)
                                             .unwrap(), // 用提交时间作为文章时间戳
                                         content,
                                     });
@@ -136,7 +136,7 @@ impl OpenGitBareRepository {
                                             .to_string_lossy()
                                             .to_string(),
                                         datetime: Local
-                                            .timestamp_opt(commit.time().seconds(), 0)
+                                            .timestamp_opt(new_commit.time().seconds(), 0)
                                             .unwrap(),
                                         content,
                                     });
@@ -169,12 +169,12 @@ impl OpenGitBareRepository {
         let repo = self.repo();
 
         // 允许旧提交解析失败（例如全 0 hash），此时作为首次提交处理
-        let parent_commit = repo
+        let old_commit = repo
             .find_commit(git2::Oid::from_str(old_commit.as_ref())?)
             .ok();
-        let commit = repo.find_commit(git2::Oid::from_str(new_commit.as_ref())?)?;
+        let new_commit = repo.find_commit(git2::Oid::from_str(new_commit.as_ref())?)?;
 
-        self.diff_commits(parent_commit.as_ref(), &commit)
+        self.diff_commits(old_commit.as_ref(), &new_commit)
     }
 
     /// 获取当前仓库最新两次提交之间的差异（HEAD 与其父）
