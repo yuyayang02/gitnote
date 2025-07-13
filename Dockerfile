@@ -54,6 +54,10 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # 复制全部源代码（依赖变更后才会执行此层）
 COPY . .
 
+# 获取外部参数
+ARG UPDATE_API
+ENV UPDATE_API=$UPDATE_API
+
 # 构建主应用（musl静态链接）
 RUN cargo build --release --target x86_64-unknown-linux-musl --bin gitnote
 RUN cargo build --release --target x86_64-unknown-linux-musl --bin update
