@@ -67,11 +67,7 @@ WORKDIR /app
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/gitnote ./
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/update /tmp/update
 
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
-RUN apk update 
-RUN apk add --no-cache git openssh curl
+COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
-COPY --from=builder /app/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-CMD ["/entrypoint.sh"]
+CMD ["./entrypoint.sh"]
