@@ -35,8 +35,10 @@ if [ -e "$LINK_PATH" ] && [ ! -L "$LINK_PATH" ]; then
   echo "⚠️ 跳过软链接：$LINK_PATH 已存在但不是链接"
 elif [ ! -L "$LINK_PATH" ]; then
   ln -sf "$REPO_PATH" "$LINK_PATH"
+  chown -h "$GIT_USER:$GIT_USER" "$LINK_PATH"
   echo "🔗 已创建软链接：$LINK_PATH -> $REPO_PATH"
 fi
+
 
 # 配置 authorized_keys
 if [ -f /ssh_keys/authorized_keys ]; then
