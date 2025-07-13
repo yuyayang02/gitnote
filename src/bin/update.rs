@@ -1,4 +1,4 @@
-const UPDATE_API: &'static str = "http://localhost:3000/api/repo/update";
+const UPDATE_API: &'static str = env!("UPDATE_API");
 
 fn print_usage_and_exit() -> ! {
     eprintln!("Usage: update <refname> <oldrev> <newrev>");
