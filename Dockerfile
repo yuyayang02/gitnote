@@ -60,8 +60,7 @@ ENV UPDATE_API=$UPDATE_API
 
 # 构建主应用（musl静态链接）
 RUN cargo build --release --target x86_64-unknown-linux-musl
-# RUN cargo build --release --target x86_64-unknown-linux-musl --bin gitnote
-# RUN cargo build --release --target x86_64-unknown-linux-musl --bin update
+
 
 # ====== 第四阶段：运行环境 ======
 # 使用轻量Alpine运行时
@@ -70,7 +69,6 @@ WORKDIR /app
 
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/gitnote ./
-# COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/update /tmp/update
 
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
