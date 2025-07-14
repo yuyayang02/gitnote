@@ -4,6 +4,8 @@ set -eux
 GIT_USER="${GIT_USER:-git}"
 GIT_USER_PASSWORD="${GIT_USER_PASSWORD:?必须设置环境变量 GIT_USER_PASSWORD}"
 REPO_NAME="${REPO_NAME:?必须设置环境变量 REPO_NAME}"
+UPDATE_API="${UPDATE_API:?必须设置环境变量 UPDATE_API，用于 Git update hook}"
+
 
 REPO_PATH="/git-repo/${REPO_NAME}"
 LINK_PATH="/home/${GIT_USER}/${REPO_NAME}"
@@ -39,6 +41,16 @@ if [ ! -L "$HOOK_PATH" ]; then
 else
   echo "✅ update hook 已链接"
 fi
+
+# 进入仓库目录以设置其特定的配置
+(
+  # 切换到 git 用户执行 git config，确保权限和所有权正确
+  su - "$GIT_USER" -c "
+    cd '$REPO_PATH'
+    echo '⚙️ 设置 Git 配置 hooks.updateapi 为: $UPDATE_API'
+    git config hooks.updateapi '$UPDATE_API'
+  "
+)
 
 # 创建软链接到 /home/git/
 if [ -e "$LINK_PATH" ] && [ ! -L "$LINK_PATH" ]; then

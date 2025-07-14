@@ -23,9 +23,11 @@ if [ "$refname" != "$DEFAULT_REFNAME" ]; then
   exit 0
 fi
 
-# 设置 API 地址（使用环境变量 UPDATE_API）
+# 设置 API 地址（从 Git 配置中读取）
+UPDATE_API=$(git config hooks.updateapi)
+
 if [ -z "$UPDATE_API" ]; then
-  echo "❌ UPDATE_API not set"
+  echo "❌ Error: 'hooks.updateapi' is not set in Git config for this repository." >&2
   exit 1
 fi
 

@@ -14,14 +14,5 @@ else
   exit 1
 fi
 
-# HOOK_PATH="$TARGET_PATH/hooks/update"
-# if [ -f /tmp/update ]; then
-#   cp /tmp/update "$HOOK_PATH"
-#   chmod +x "$HOOK_PATH"
-#   echo "✅ 已安装 update hook"
-# else
-#   echo "⚠️ /tmp/update hook 脚本不存在，跳过"
-# fi
-
 cd /app
 exec ./gitnote
