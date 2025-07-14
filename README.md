@@ -4,6 +4,19 @@
 
 ---
 
+## 🛠️ 架构变更说明（2025-07-14）
+
+GitNote 项目将 Git Server 功能拆分为独立项目：
+
+- 原本内嵌于 Rust API 的 Git Server（基于 SSH 和裸仓库）已 **完全迁移** 到独立的仓库：[GitNote Git Server](https://github.com/yuyayang02/gitnote-git-server)。
+- Rust API 不再负责容器内初始化 git 仓库、用户、公钥配置等逻辑，相关任务交由 Git Server 独立容器完成。
+- 两者之间通过挂载共享卷（或 API 通信）协同工作。
+- 原有仓库中的 `docker-compose.yml`、`sshd` 目录、`update` hook 等已删除。
+
+🎯 **拆分目标**：解耦职责、便于维护、增强容器可组合性。
+
+---
+
 ## 📁 内容结构约定
 
 ```text
