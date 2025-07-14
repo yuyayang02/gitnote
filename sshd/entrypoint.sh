@@ -8,6 +8,7 @@ REPO_NAME="${REPO_NAME:?必须设置环境变量 REPO_NAME}"
 REPO_PATH="/git-repo/${REPO_NAME}"
 LINK_PATH="/home/${GIT_USER}/${REPO_NAME}"
 SSH_DIR="/home/${GIT_USER}/.ssh"
+HOOK_PATH="${REPO_PATH}/hooks/update"
 
 # 创建 git 用户（如果不存在）
 if ! id "$GIT_USER" >/dev/null 2>&1; then
@@ -21,13 +22,22 @@ if ! id "$GIT_USER" >/dev/null 2>&1; then
   chown -R "$GIT_USER:$GIT_USER" "/home/${GIT_USER}"
 fi
 
-# 初始化 Git 裸仓库（检查 HEAD）
+# 初始化 Git 裸仓库
 if [ ! -f "$REPO_PATH/HEAD" ]; then
   echo "📦 初始化 Git 裸仓库：$REPO_PATH"
   git init --bare --initial-branch=main "$REPO_PATH"
   chown -R "$GIT_USER:$GIT_USER" "$REPO_PATH"
 else
   echo "✅ 仓库已存在：$REPO_PATH"
+fi
+
+# 添加 update hook（软链接方式）
+if [ ! -L "$HOOK_PATH" ]; then
+  echo "🔗 添加 update hook 到 $HOOK_PATH"
+  ln -sf /update "$HOOK_PATH"
+  chown -h "$GIT_USER:$GIT_USER" "$HOOK_PATH"
+else
+  echo "✅ update hook 已链接"
 fi
 
 # 创建软链接到 /home/git/
@@ -39,7 +49,6 @@ elif [ ! -L "$LINK_PATH" ]; then
   echo "🔗 已创建软链接：$LINK_PATH -> $REPO_PATH"
 fi
 
-
 # 配置 authorized_keys
 if [ -f /ssh_keys/authorized_keys ]; then
   cp /ssh_keys/authorized_keys "$SSH_DIR/authorized_keys"
@@ -48,10 +57,15 @@ if [ -f /ssh_keys/authorized_keys ]; then
   echo "🔐 已更新 authorized_keys"
 fi
 
-# 生成 SSH host key（若不存在）
-ssh-keygen -A
+# ✅ 仅在 host key 不存在时生成
+if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
+  echo "🔑 首次生成 SSH host keys"
+  ssh-keygen -A
+else
+  echo "✅ SSH host keys 已存在"
+fi
 
-# 写入 sshd_config（简洁版）
+# 写入 sshd_config（可扩展）
 cat <<EOF > /etc/ssh/sshd_config
 Port 22
 PermitRootLogin no

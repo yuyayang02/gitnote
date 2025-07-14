@@ -7,7 +7,9 @@ RUN apk add --no-cache git openssh curl
 WORKDIR /app
 
 COPY entrypoint.sh /entrypoint.sh
+COPY update /update
 RUN chmod +x /entrypoint.sh
+RUN chmod +x /update
 
 EXPOSE 22
 

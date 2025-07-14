@@ -8,8 +8,6 @@ services:
     ports:
       - "4000:3000"
     env_file: .env
-    depends_on:
-      - gitnote-sshd
     volumes:
       - ./git-repo:/git-repo  # 容器内用 ln 链接到对应目录
     logging:
@@ -27,6 +25,8 @@ services:
       dockerfile: "Dockerfile"
     ports:
       - "2222:22" # 替换为你指定的端口
+    volumes:
+      - ./git-repo:/git-repo  # 容器内用 ln 链接到对应目录
     env_file: .env
     volumes:
       - ./git-repo/:/git-repo  # 容器内用 ln 链接到对应目录
