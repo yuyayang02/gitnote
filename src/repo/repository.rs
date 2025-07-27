@@ -204,7 +204,7 @@ impl OpenGitBareRepository {
             .flatten()
             .collect();
 
-        Ok(entries)
+        Ok(super::entry::strip_add_then_remove(entries))
     }
 
     /// 提供字符串形式的提交 ID 比较差异（封装 `diff_commits` 的便捷入口）。
