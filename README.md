@@ -73,6 +73,15 @@ datetime = "2025-06-26"
 正文内容……
 ```
 
+## 📂 Git 历史管理
+
+本项目在需要对主分支历史进行大规模调整（例如替换 main 分支历史为精简的存档分支历史）时，采用了规范的操作流程。
+
+具体操作步骤、注意事项、命令汇总详见： [docs/git-history-replace.md](docs/git-history-replace.md)
+
+> 该文档说明了如何使用 archived/2025-Q1 分支替换 main 分支中指定 tag 及其之前历史，同时保留后续提交，保证 Git 仓库历史的整洁与安全。
+
+
 ## 🚧 Future Plans
 
 - 重构 `rebuild` 功能为后台异步任务，支持任务状态跟踪和异步触发。

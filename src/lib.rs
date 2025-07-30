@@ -11,6 +11,8 @@ use std::path::Path;
 
 use tracing_subscriber::{EnvFilter, fmt::time::ChronoLocal};
 
+use crate::repo::ArchiveTagger;
+
 pub async fn run() {
     tracing_subscriber::fmt()
         .with_target(false)
@@ -18,14 +20,19 @@ pub async fn run() {
         .with_env_filter(EnvFilter::from_env("GITNOTE_LOG"))
         .init();
 
+    let repo = repo::GitBareRepository::new("gitnote.git");
+
     let app = api::App::new(
         db::init_db_from_env().await,
         github_render::GithubAPiRenderer::default(),
-        repo::GitBareRepository::new("gitnote.git"),
+        repo.clone(),
     );
 
+    let tagger = ArchiveTagger::new(repo, (4, 30), 24 * 60 * 60);
+
     ensure_bare_repo();
-    api::run_server(app).await;
+
+    tokio::join!(api::run_server(app), tagger.run_scheduled_task());
 }
 
 pub fn ensure_bare_repo() {

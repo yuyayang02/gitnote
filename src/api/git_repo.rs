@@ -13,19 +13,36 @@ pub fn setup_route() -> Router<App> {
     Router::new()
         .route("/repo/rebuild", post(git_repo_rebuild))
         .route("/repo/update", post(git_repo_update))
+        .route("/repo/archive", post(git_repo_archive))
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GitRefUpdate {
-    // pub refname: String,
+pub struct GitUpdateHookArgs {
+    pub refname: String,
     pub oldrev: String,
     pub newrev: String,
 }
 
-async fn git_repo_rebuild(State(app): State<App>) -> Result<StatusCode> {
-    let repo = app.repo.open()?;
+async fn git_repo_archive(
+    State(app): State<App>,
+    Json(data): Json<GitUpdateHookArgs>,
+) -> Result<(StatusCode, String)> {
+    // 只处理以 "refs/tags/archive/" 开头，且后缀非空的标签
+    const ARCHIVE_PREFIX: &str = "refs/tags/archive/";
 
-    let entries = repo.rebuild_all()?;
+    let tag_str = match data.refname.strip_prefix(ARCHIVE_PREFIX) {
+        Some(suffix) if !suffix.trim().is_empty() => suffix,
+        _ => return Ok((StatusCode::NO_CONTENT, String::new())),
+    };
+
+    let info = app.repo.archive(tag_str, &data.newrev)?;
+
+    Ok((StatusCode::OK, info.summary()))
+}
+
+async fn git_repo_rebuild(State(app): State<App>) -> Result<StatusCode> {
+    let entries = app.repo.diff_all()?;
+
     let mut tx = app.db.begin().await?;
 
     // 清除所有数据表
@@ -47,11 +64,16 @@ async fn git_repo_rebuild(State(app): State<App>) -> Result<StatusCode> {
 
 async fn git_repo_update(
     State(app): State<App>,
-    Json(data): Json<GitRefUpdate>,
+    Json(data): Json<GitUpdateHookArgs>,
 ) -> Result<(StatusCode, String)> {
-    let repo = app.repo.open()?;
+    // 仅处理 refs/heads/main 分支的推送
+    const MAIN_REF: &str = "refs/heads/main";
 
-    let entries = repo.diff_commits_from_str(data.oldrev, data.newrev)?;
+    if data.refname != MAIN_REF {
+        return Ok((StatusCode::NO_CONTENT, String::new()));
+    }
+
+    let entries = app.repo.diff_commit(data.oldrev, data.newrev)?;
 
     // 构造最终输出字符串：将 RepoEntry 项逐个格式化为字符串后连接成完整输出
     let resp_str = entries

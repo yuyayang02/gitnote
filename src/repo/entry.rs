@@ -6,46 +6,33 @@ use std::{
 
 use chrono::{DateTime, Local};
 
+/// 表示 Git 仓库中的一次变更操作。
+///
+/// `RepoEntry` 用于统一描述文件或 GitNote 的添加、删除操作，
+/// 可用于构建归档记录、生成提交日志等。
 #[derive(Debug)]
 pub enum RepoEntry {
-    GitNote {
-        group: PathBuf,
-        content: String,
-    },
-    RemoveGitNote {
-        group: PathBuf,
-    },
+    /// 表示某个目录下新增了一个 GitNote 文件（以 `.gitnote.toml` 命名）
+    GitNote { group: PathBuf, content: String },
+    /// 表示某个目录下删除了 GitNote 文件
+    RemoveGitNote { group: PathBuf },
+    /// 表示新增了一个普通文件（通常是 `.md` 文件）
     File {
         group: PathBuf,
         name: String,
         datetime: DateTime<Local>,
         content: String,
     },
-    RemoveFile {
-        group: PathBuf,
-        name: String,
-    },
+    /// 表示删除了一个普通文件
+    RemoveFile { group: PathBuf, name: String },
 }
 
-/// 过滤并移除成对出现的“添加后删除”的变更记录。
+/// 对变更记录进行清洗：移除先添加后删除的重复变更。
 ///
-/// 对于同一个文件或 GitNote，若出现了先添加（File / GitNote），后删除（RemoveFile / RemoveGitNote）的
-/// 操作，会将这对操作都从结果中剔除，保留最终未被删除的添加操作。
+/// 在某些场景下（如 rebase 或 squash 后），同一个文件在多个 commit 中被添加然后又立即删除，
+/// 这类中间操作是冗余的，对最终状态没有影响。该函数将这类成对出现的“添加-删除”操作剔除。
 ///
-/// # 参数
-/// - `entries`：输入的变更记录列表，按时间顺序排列。
-///
-/// # 返回值
-/// - 返回过滤后的变更记录列表，其中所有成对的“添加-删除”操作已被移除。
-///
-/// # 具体逻辑
-/// 1. 使用两个 HashMap 分别跟踪文件和 GitNote 的“添加”操作的索引位置（栈结构，后进先出）。
-/// 2. 遍历输入的变更记录：
-///    - 遇到添加操作（File / GitNote），将索引压入对应的栈。
-///    - 遇到删除操作（RemoveFile / RemoveGitNote），尝试从对应栈中弹出最近的添加索引，
-///      若成功，表示找到了一对“添加-删除”，将二者标记为不保留。
-///    - 其他操作不影响栈结构，直接保留。
-/// 3. 遍历结束后，将所有未被配对移除的变更保留返回。
+/// 用于简化归档数据，保留对最终状态真正有意义的变更。
 pub fn strip_add_then_remove(entries: Vec<RepoEntry>) -> Vec<RepoEntry> {
     // 若条目太少，直接返回，无需处理
     if entries.len() < 2 {
@@ -103,6 +90,9 @@ pub fn strip_add_then_remove(entries: Vec<RepoEntry>) -> Vec<RepoEntry> {
         .collect()
 }
 
+/// 实现 RepoEntry 的字符串展示逻辑。
+///
+/// 用于生成归档日志或 CLI 打印时的格式化输出。
 impl fmt::Display for RepoEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -141,7 +131,9 @@ impl fmt::Display for RepoEntry {
     }
 }
 
-/// 给数字添加千分位分隔符，比如 1234567 -> "1,234,567"
+/// 给数字加上千分位分隔符，提升可读性。
+///
+/// 示例：`1234567` -> `"1,234,567"`
 fn format_with_commas(n: usize) -> String {
     // 先把数字转成字符串
     let s = n.to_string();

@@ -1,3 +1,5 @@
+use std::io;
+
 use axum::response::IntoResponse;
 use reqwest::StatusCode;
 
@@ -30,33 +32,35 @@ pub enum Error {
 
     #[error(transparent)]
     ApiError(#[from] ApiError),
+
+    #[error(transparent)]
+    Io(#[from] io::Error),
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
         match self {
             Error::Repository(e) => {
-                tracing::error!(?e, "git repo error");
+                tracing::error!(%e, "git repo error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
             }
             .into_response(),
-
             Error::Sqlx(e) => {
-                tracing::error!(?e, "sqlx error");
+                tracing::error!(%e, "sqlx error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
             }
             .into_response(),
-
             Error::Reqwest(_) => (StatusCode::BAD_GATEWAY, "Bad Gateway").into_response(),
-
             Error::ApiError(api_error) => match api_error {
                 ApiError::NotFound => (StatusCode::NOT_FOUND, "NOT FOUND").into_response(),
             },
-
             Error::FormatError(s) => (StatusCode::BAD_REQUEST, s.to_string()).into_response(),
-
             Error::Serde(e) => (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
-            // Error::InvaildBranch(e) => (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
+            Error::Io(e) => {
+                tracing::error!(%e, "file io error");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+            }
+            .into_response(),
         }
     }
 }

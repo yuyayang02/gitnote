@@ -1,6 +1,6 @@
 [package]
 name = "gitnote"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 default-run = "gitnote"
 
@@ -23,6 +23,7 @@ sqlx = { version = "0.8.6", features = [
     "json",
     "chrono",
 ] }
+tempfile = "3.20.0"
 thiserror = "2.0.12"
 tokio = { version = "1.45.1", features = ["full"] }
 toml = "0.8.23"

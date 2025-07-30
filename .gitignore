@@ -1,6 +1,7 @@
 /target
 gitnote.git
 /content
+/content2
 
 authorized_keys
 /.cargo
