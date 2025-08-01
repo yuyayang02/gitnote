@@ -1,6 +1,11 @@
 use std::path::Path;
 
-use axum::{Json, Router, extract::State, routing::post};
+use axum::{
+    Json, Router,
+    extract::State,
+    response::{IntoResponse, Response},
+    routing::post,
+};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -10,8 +15,7 @@ use crate::{
 };
 
 pub fn setup_route() -> Router<App> {
-    Router::new()
-        .route("/repo/update", post(update))
+    Router::new().route("/repo/update", post(update))
 }
 
 #[derive(Debug)]
@@ -148,37 +152,35 @@ impl RepoEntries {
     }
 }
 
-async fn update(
-    State(app): State<App>,
-    Json(data): Json<GitUpdateHookArgs>,
-) -> Result<(StatusCode, String)> {
+async fn update(State(app): State<App>, Json(data): Json<GitUpdateHookArgs>) -> Result<Response> {
     let ref_kind = data.ref_kind();
     match (ref_kind, data.is_deletion()) {
         (RefKind::ArchiveTag(tag), false) => {
             let info = app.repo.archive(tag, &data.newrev)?;
-            Ok((StatusCode::OK, info.summary()))
+            Ok((StatusCode::OK, info.summary()).into_response())
         }
 
         (RefKind::MainBranch, false) => {
             let entries: RepoEntries = app.repo.diff_commit(data.oldrev, data.newrev)?.into();
             let entries_str = entries.as_summary_string();
             entries.persist_to_db(&app, false).await?;
-            Ok((StatusCode::OK, entries_str))
+            Ok((StatusCode::OK, entries_str).into_response())
         }
 
         (RefKind::RebuildTag, false) => {
             let entries: RepoEntries = app.repo.diff_all()?.into();
             let entries_str = entries.as_summary_string();
             entries.persist_to_db(&app, true).await?;
-            Ok((StatusCode::OK, entries_str))
+            Ok((StatusCode::OK, entries_str).into_response())
         }
 
         (RefKind::MainBranch, true) => Ok((
             StatusCode::FORBIDDEN,
             "❌ Deleting 'main' branch is not allowed.".to_string(),
-        )),
+        )
+            .into_response()),
 
         // (_, true) => Ok((StatusCode::NO_CONTENT, String::new())), // 忽略删除
-        _ => Ok((StatusCode::NO_CONTENT, String::new())),
+        _ => Ok(StatusCode::NO_CONTENT.into_response()),
     }
 }
