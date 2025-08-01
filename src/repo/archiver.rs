@@ -103,7 +103,9 @@ impl<'a> Archiver<'a> {
 
         // 清理空的残留工作树路径（可能是上次中断的结果）
         let meta_path = repo.path().join("worktrees").join(tag_str);
-        if meta_path.exists() && meta_path.read_dir()?.next().is_none() {
+
+        // 如果目录存在就强制删除
+        if meta_path.exists() {
             std::fs::remove_dir_all(&meta_path)?;
         }
 
@@ -184,6 +186,8 @@ impl<'a> Archiver<'a> {
 
         // 获取从初始到目标 commit 的精简变更列表
         let entries = super::DiffUtil::new(self.repo).diff_commits(None, &tag_commit)?;
+
+        dbg!(&entries);
 
         // 根据时间分组归档条目
         let (grouped, now) = Self::group_entries_by_time(&entries);
