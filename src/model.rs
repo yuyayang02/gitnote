@@ -35,9 +35,9 @@ pub struct ArticleListItem {
     pub author_name: Option<String>,
 }
 
-pub struct ArticleModel;
+pub struct ArticleRepo;
 
-impl ArticleModel {
+impl ArticleRepo {
     pub async fn reset_all<'c>(tx: &mut sqlx::PgTransaction<'c>) -> Result<()> {
         sqlx::query(
             "
@@ -121,7 +121,7 @@ impl ArticleModel {
     }
 }
 
-impl ArticleModel {
+impl ArticleRepo {
     pub async fn get_one<'a, E: sqlx::PgExecutor<'a>>(
         executor: E,
         slug: impl AsRef<str>,

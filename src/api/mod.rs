@@ -1,5 +1,4 @@
 mod git_repo;
-
 mod query;
 
 use std::sync::Arc;
@@ -18,7 +17,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(db: Db, renderer: GithubAPiRenderer, repo: GitBareRepository) -> Self {
+    pub fn new(db: Db, renderer: GithubAPiRenderer, repo: GitBareRepository) -> App {
         Self {
             db: Arc::new(db),
             renderer,
@@ -27,17 +26,23 @@ impl App {
     }
 }
 
-#[instrument(name = "http server", skip_all)]
-pub async fn run_server(app: App) {
-    let router = Router::new()
+pub fn setup_route(app: App) -> Router {
+    Router::new()
         .nest("/api", git_repo::setup_route().merge(query::setup_route()))
-        .with_state(app);
+        .with_state(app)
+}
 
-    let router = add_middlewares(router);
-
+#[instrument(name = "http server", skip_all)]
+pub async fn run_server_with_router(router: Router) {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     tracing::info!("listening on :3000");
     axum::serve(listener, router).await.unwrap();
+}
+
+pub async fn run_server(app: App) {
+    let router = setup_route(app);
+    let router = add_middlewares(router);
+    run_server_with_router(router).await
 }
 
 fn add_middlewares(router: Router) -> Router {

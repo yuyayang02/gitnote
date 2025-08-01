@@ -1,6 +1,6 @@
 use crate::api::App;
 use crate::error::{ApiError, Result};
-use crate::model::ArticleModel;
+use crate::model::ArticleRepo;
 use axum::extract::{Path, State};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -50,7 +50,7 @@ async fn articles_get_one(
     Path(slug): Path<String>,
     State(app): State<App>,
 ) -> Result<Json<ArticleFull>> {
-    let article = ArticleModel::get_one(app.db.as_ref(), slug)
+    let article = ArticleRepo::get_one(app.db.as_ref(), slug)
         .await?
         .ok_or(ApiError::NotFound)?;
 
@@ -73,11 +73,11 @@ async fn articles_get_one(
 }
 
 async fn articles_tags(State(app): State<App>) -> Result<Json<Vec<String>>> {
-    ArticleModel::tags(app.db.as_ref()).await.map(|r| Json(r))
+    ArticleRepo::tags(app.db.as_ref()).await.map(|r| Json(r))
 }
 
 async fn articels_categories(State(app): State<App>) -> Result<Json<Vec<Category>>> {
-    ArticleModel::categories(app.db.as_ref()).await.map(|a| {
+    ArticleRepo::categories(app.db.as_ref()).await.map(|a| {
         Json(
             a.into_iter()
                 .map(|(id, name)| Category { id, name })
@@ -113,7 +113,7 @@ async fn articles_list(
     State(app): State<App>,
 ) -> Result<Json<Vec<ArticleMeta>>> {
     Ok(Json(
-        ArticleModel::list(
+        ArticleRepo::list(
             app.db.as_ref(),
             params.limit,
             params.page,
