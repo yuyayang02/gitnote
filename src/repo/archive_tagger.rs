@@ -1,4 +1,4 @@
-use chrono::{Datelike, Duration, Local, NaiveTime};
+use chrono::{Datelike, Local, NaiveTime};
 use tracing::instrument;
 
 use super::GitBareRepository;
@@ -54,7 +54,7 @@ impl<T: IntoNaiveTime> ArchiveTagger<T> {
     /// 构造新的归档调度器
     ///
     /// - `repo`: GitBareRepository，裸仓库访问封装
-    /// - `run_at_time`: 任务每日触发时间点
+    /// - `run_at_time`: 任务每日触发时间点，use (u32,)/(u32, u32)/(u32, u32, u32)
     /// - `interval`: 任务触发间隔秒数（通常为 86400，即每天一次）
     pub fn new(repo: GitBareRepository, run_at_time: T, interval: u64) -> Self {
         Self {
@@ -72,18 +72,21 @@ impl<T: IntoNaiveTime> ArchiveTagger<T> {
     /// - 否则延迟至第二天的设定时间
     fn compute_initial_delay(&self) -> tokio::time::Duration {
         let now = Local::now();
-
-        let target_time = self.run_at_time.to_time();
         let now_time = now.time();
+        let today = now.date_naive();
+        let target_time = self.run_at_time.to_time();
 
-        let delay = if now_time < target_time {
-            (target_time - now_time).to_std().unwrap()
+        let target_dt = today.and_time(target_time);
+
+        let next_run = if now_time < target_time {
+            target_dt
         } else {
-            let tomorrow_target = target_time + Duration::days(1);
-            (tomorrow_target - now_time).to_std().unwrap()
+            (today + chrono::Duration::days(1)).and_time(target_time)
         };
 
-        tokio::time::Duration::from_secs(delay.as_secs())
+        let delay = next_run - now.naive_local();
+
+        tokio::time::Duration::from_secs(delay.to_std().unwrap().as_secs())
     }
 
     /// 启动调度任务，周期性检查并根据日期创建季度归档标签。
