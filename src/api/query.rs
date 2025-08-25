@@ -1,11 +1,10 @@
-use crate::api::App;
-use crate::error::{ApiError, Result};
-use crate::model::ArticleRepo;
 use axum::extract::{Path, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
+
+use super::{App, ArticleQuery, Error, Result};
 
 pub fn setup_route() -> Router<App> {
     Router::new()
@@ -50,9 +49,7 @@ async fn articles_get_one(
     Path(slug): Path<String>,
     State(app): State<App>,
 ) -> Result<Json<ArticleFull>> {
-    let article = ArticleRepo::get_one(app.db.as_ref(), slug)
-        .await?
-        .ok_or(ApiError::NotFound)?;
+    let article = app.db().get_one(&slug).await?.ok_or(Error::NotFound)?;
 
     Ok(Json(ArticleFull {
         meta: ArticleMeta {
@@ -60,10 +57,10 @@ async fn articles_get_one(
             title: article.title,
             summary: article.summary,
             tags: article.tags,
-            category: article
-                .category_id
-                .zip(article.category_name)
-                .map(|(id, name)| Category { id, name }),
+            category: article.category.map(|c| Category {
+                id: c.0.id,
+                name: c.0.name,
+            }),
             author: article.author_name.map(|name| Author { name }),
             updated_at: article.updated_at.timestamp_millis(),
             created_at: article.created_at.timestamp_millis(),
@@ -73,17 +70,25 @@ async fn articles_get_one(
 }
 
 async fn articles_tags(State(app): State<App>) -> Result<Json<Vec<String>>> {
-    ArticleRepo::tags(app.db.as_ref()).await.map(|r| Json(r))
+    app.db().tags().await.map(|r| Json(r)).map_err(Into::into)
 }
 
 async fn articels_categories(State(app): State<App>) -> Result<Json<Vec<Category>>> {
-    ArticleRepo::categories(app.db.as_ref()).await.map(|a| {
-        Json(
-            a.into_iter()
-                .map(|(id, name)| Category { id, name })
-                .collect(),
-        )
-    })
+    app.db()
+        .categories()
+        .await
+        .map(|c_vec| {
+            Json(
+                c_vec
+                    .into_iter()
+                    .map(|c| Category {
+                        id: c.id,
+                        name: c.name,
+                    })
+                    .collect(),
+            )
+        })
+        .map_err(Into::into)
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,31 +118,31 @@ async fn articles_list(
     State(app): State<App>,
 ) -> Result<Json<Vec<ArticleMeta>>> {
     Ok(Json(
-        ArticleRepo::list(
-            app.db.as_ref(),
-            params.limit,
-            params.page,
-            params.category,
-            params.author,
-            params.tags,
-        )
-        .await
-        .map(|va| {
-            va.into_iter()
-                .map(|a| ArticleMeta {
-                    slug: a.slug,
-                    title: a.title,
-                    summary: a.summary,
-                    tags: a.tags,
-                    category: a
-                        .category_id
-                        .zip(a.category_name)
-                        .map(|(id, name)| Category { id, name }),
-                    author: a.author_name.map(|name| Author { name }),
-                    updated_at: a.updated_at.timestamp_millis(),
-                    created_at: a.created_at.timestamp_millis(),
-                })
-                .collect()
-        })?,
+        app.db()
+            .list(
+                params.limit,
+                params.page,
+                params.category,
+                params.author,
+                params.tags,
+            )
+            .await
+            .map(|va| {
+                va.into_iter()
+                    .map(|a| ArticleMeta {
+                        slug: a.slug,
+                        title: a.title,
+                        summary: a.summary,
+                        tags: a.tags,
+                        category: a.category.map(|c| Category {
+                            id: c.0.id,
+                            name: c.0.name,
+                        }),
+                        author: a.author_name.map(|name| Author { name }),
+                        updated_at: a.updated_at.timestamp_millis(),
+                        created_at: a.created_at.timestamp_millis(),
+                    })
+                    .collect()
+            })?,
     ))
 }

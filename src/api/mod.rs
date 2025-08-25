@@ -1,30 +1,16 @@
 mod git_repo;
 mod query;
 
-use std::sync::Arc;
-
 use axum::Router;
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
 
-use crate::{db::Db, github_render::GithubAPiRenderer, repo::GitBareRepository};
-
-#[derive(Clone)]
-pub struct App {
-    db: Arc<Db>,
-    renderer: GithubAPiRenderer,
-    repo: Arc<GitBareRepository>,
-}
-
-impl App {
-    pub fn new(db: Db, renderer: GithubAPiRenderer, repo: GitBareRepository) -> App {
-        Self {
-            db: Arc::new(db),
-            renderer,
-            repo: Arc::new(repo),
-        }
-    }
-}
+use crate::{
+    app::App,
+    error::{Error, Result},
+    git_repo::{PersistMode, RefKind, RepoEntryPersist},
+    storage::ArticleQuery,
+};
 
 pub fn setup_route(app: App) -> Router {
     Router::new()
@@ -34,9 +20,15 @@ pub fn setup_route(app: App) -> Router {
 
 #[instrument(name = "http server", skip_all)]
 pub async fn run_server_with_router(router: Router) {
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("Failed to bind TCP listener on 0.0.0.0:3000");
+
     tracing::info!("listening on :3000");
-    axum::serve(listener, router).await.unwrap();
+
+    axum::serve(listener, router)
+        .await
+        .expect("Failed to start Axum server");
 }
 
 pub async fn run_server(app: App) {

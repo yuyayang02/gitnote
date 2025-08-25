@@ -1,17 +1,17 @@
-mod api;
-mod articles;
-mod db;
-mod error;
-mod github_render;
-mod group;
-mod model;
-mod repo;
+pub mod api;
+pub mod app;
+pub mod content;
+pub mod error;
+pub mod git;
+pub mod git_repo;
+pub mod render;
+pub mod storage;
 
 use std::path::Path;
 
 use tracing_subscriber::{EnvFilter, fmt::time::ChronoLocal};
 
-use crate::repo::ArchiveTagger;
+use app::App;
 
 pub async fn run() {
     tracing_subscriber::fmt()
@@ -20,29 +20,40 @@ pub async fn run() {
         .with_env_filter(EnvFilter::from_env("GITNOTE_LOG"))
         .init();
 
-    let repo = repo::GitBareRepository::new("gitnote.git");
+    let git_repo_path = git_repo_path();
 
-    let app = api::App::new(
-        db::init_db_from_env().await,
-        github_render::GithubAPiRenderer::default(),
+    let repo = git::GitBareRepository::new(git_repo_path);
+
+    let app = App::new(
+        storage::init_db_from_env().await,
+        render::GithubAPiRenderer::default(),
         repo.clone(),
     );
 
-    let tagger = ArchiveTagger::new(repo, (4, 30), 24 * 60 * 60);
-
-    ensure_bare_repo();
-
-    tokio::join!(api::run_server(app), tagger.run_scheduled_task());
+    api::run_server(app).await
 }
 
 pub fn ensure_bare_repo() {
-    let repo_name = std::env::var("REPO_NAME").unwrap();
+    let repo_name = std::env::var("GIT_REPO_PATH").expect("GIT_REPO_PATH not set");
 
     let path = Path::new(repo_name.as_str());
 
     // 如果路径已存在且是一个 Git 仓库，什么也不做
-    if !(path.exists() && path.join("HEAD").exists()) {
-        eprintln!("You must first initialize the bare repository.");
-        std::process::exit(1)
-    }
+
+    assert!(
+        path.exists() && path.join("HEAD").exists(),
+        "You must first initialize the bare repository."
+    )
+}
+
+pub fn git_repo_path() -> String {
+    let repo_name = std::env::var("GIT_REPO_PATH").expect("GIT_REPO_PATH not set");
+    let path = Path::new(repo_name.as_str());
+
+    assert!(
+        path.exists() && path.join("HEAD").exists(),
+        "You must first initialize the bare repository."
+    );
+
+    repo_name
 }
