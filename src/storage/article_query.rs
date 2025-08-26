@@ -19,8 +19,7 @@ pub trait ArticleQuery {
             let result = sqlx::query_as::<_, ArticleDetail>(
                 r#"
                 SELECT a.slug, a.title, a.summary, a.tags, a.content, a.updated_at, a.created_at,
-                       g.category ->> 'id' AS category_id,
-                       g.category ->> 'name' AS category_name,
+                       g.category,
                        g.author ->> 'name' AS author_name
                 FROM articles a
                 INNER JOIN groups g ON a.group_path = g.path
@@ -52,8 +51,7 @@ pub trait ArticleQuery {
             let mut builder = sqlx::QueryBuilder::new(
                 r#"
                 SELECT a.slug, a.title, a.summary, a.tags, a.updated_at, a.created_at,
-                       g.category ->> 'id' AS category_id,
-                       g.category ->> 'name' AS category_name,
+                       g.category,
                        g.author ->> 'name' AS author_name
                 FROM articles a
                 INNER JOIN groups g ON a.group_path = g.path
