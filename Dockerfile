@@ -67,6 +67,14 @@ RUN cargo build --release --target x86_64-unknown-linux-musl
 FROM alpine:latest AS runtime
 WORKDIR /app
 
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+RUN apk update 
+
+# 安装必要软件
+RUN apk add --no-cache \
+    git \
+    openssh
+
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/gitnote ./
 
