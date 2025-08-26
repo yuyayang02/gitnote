@@ -11,10 +11,6 @@ pub trait ArticleQuery {
     ///
     /// 返回 [`ArticleDetail`]，如果文章不存在则返回 `None`。
     ///
-    /// ```ignore
-    /// let db: Db = /* 初始化 Db */;
-    /// let article = db.get_one("slug-example").await.unwrap();
-    /// ```
     fn get_one(
         &self,
         slug: impl AsRef<str>,
@@ -43,10 +39,6 @@ pub trait ArticleQuery {
     ///
     /// 返回 [`ArticleListItem`] 的向量，可按分类、作者或标签过滤。
     ///
-    /// ```ignore
-    /// let db: Db = /* 初始化 Db */;
-    /// let articles = db.list(10, 1, None, None, vec!["rust".to_string()]).await.unwrap();
-    /// ```
     fn list(
         &self,
         limit: i32,
@@ -93,10 +85,6 @@ pub trait ArticleQuery {
     ///
     /// 返回系统中所有公开分组的分类信息。
     ///
-    /// ```ignore
-    /// let db: Db = /* 初始化 Db */;
-    /// let categories = db.categories().await.unwrap();
-    /// ```
     fn categories(&self) -> impl Future<Output = Result<Vec<CategoryInfo>, sqlx::Error>> + '_ {
         async move {
             let rows = sqlx::query_as::<_, CategoryInfo>(
@@ -121,10 +109,6 @@ pub trait ArticleQuery {
     ///
     /// 返回系统中所有公开文章的标签集合。
     ///
-    /// ```ignore
-    /// let db: Db = /* 初始化 Db */;
-    /// let tags = db.tags().await.unwrap();
-    /// ```
     fn tags(&self) -> impl Future<Output = Result<Vec<String>, sqlx::Error>> + '_ {
         async move {
             Ok(sqlx::query_scalar(

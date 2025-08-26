@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{git::GitBareRepository, render::GithubAPiRenderer, storage::Db};
+use crate::{render::GithubAPiRenderer, storage::Db};
 
 /// 应用程序上下文
 ///
@@ -9,23 +9,14 @@ use crate::{git::GitBareRepository, render::GithubAPiRenderer, storage::Db};
 pub struct App {
     db: Arc<Db>,
     renderer: GithubAPiRenderer,
-    git: Arc<GitBareRepository>,
 }
 
 impl App {
     /// 创建一个新的 [`App`] 实例
-    ///
-    /// ```ignore
-    /// # let db: Db = todo!();
-    /// # let renderer: GithubAPiRenderer = todo!();
-    /// # let repo: GitBareRepository = todo!();
-    /// let app = App::new(db, renderer, repo);
-    /// ```
-    pub fn new(db: Db, renderer: GithubAPiRenderer, repo: GitBareRepository) -> App {
+    pub fn new(db: Db, renderer: GithubAPiRenderer) -> App {
         Self {
             db: Arc::new(db),
             renderer,
-            git: Arc::new(repo),
         }
     }
 
@@ -41,12 +32,5 @@ impl App {
     /// 返回 [`GithubAPiRenderer`] 的引用。
     pub fn renderer(&self) -> &GithubAPiRenderer {
         &self.renderer
-    }
-
-    /// 获取裸 Git 仓库引用
-    ///
-    /// 返回 [`GitBareRepository`] 的引用。
-    pub fn repo(&self) -> &GitBareRepository {
-        &self.git
     }
 }

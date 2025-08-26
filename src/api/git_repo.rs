@@ -5,58 +5,52 @@ use axum::{
     routing::post,
 };
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
 
-use crate::git::AsSummary;
+use crate::{
+    git::{AsSummary, GitRepository},
+    git_repo::GitPushPayload,
+};
 
-use super::{App, PersistMode, RefKind, RepoEntryPersist, Result};
+use super::{App, PersistMode, PushKind, RepoEntryPersist, Result};
 
+/// 配置 Git 仓库更新相关的路由。
+///
+/// 将 `/repo/update` 注册为 POST 请求，用于处理 Git push 事件。
 pub fn setup_route() -> Router<App> {
     Router::new().route("/repo/update", post(update))
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct GitUpdateHookArgs {
-    pub refname: String,
-    pub oldrev: String,
-    pub newrev: String,
-}
-
-async fn update(State(app): State<App>, Json(data): Json<GitUpdateHookArgs>) -> Result<Response> {
-    let ref_kind = RefKind::parse_ref_kind(&data.refname);
-
+/// 处理 Git push 请求。
+///
+/// 根据 push 类型执行不同操作：
+///
+/// - [`PushKind::Sync`]：对比两个 commit 的差异，并进行增量持久化，同时返回变更摘要。
+/// - [`PushKind::Rebuild`]：获取目标 commit 的完整快照，重建数据。
+/// - 其他类型：返回 `201 Created` 表示操作成功但没有内容返回。
+///
+/// 执行流程：
+/// 1. 打开并 fetch 仓库
+/// 2. 根据 push 类型选择增量或全量处理
+/// 3. 调用 [`RepoEntryPersist::persist`] 将数据写入应用
+/// 4. 返回 HTTP 响应
+async fn update(State(app): State<App>, Json(data): Json<GitPushPayload>) -> Result<Response> {
+    let ref_kind = data.push_kind();
     match ref_kind {
-        RefKind::MainBranch => {
-            let entries = app
-                .repo()
-                .open()?
-                .diff_commits(&data.oldrev, &data.newrev)?;
-            entries.persist(app, PersistMode::Incremental).await?;
-            return Ok((StatusCode::OK, entries.as_summary()).into_response());
-        }
-        RefKind::Archive => {
-            let info = app.repo().open()?.archive(&data.newrev)?;
-            return Ok((StatusCode::OK, info.as_summary()).into_response());
-        }
-        RefKind::ArchiveMerge => {
-            return Ok((StatusCode::NOT_IMPLEMENTED, "Not implemented yet").into_response());
-        }
-        RefKind::Rebuild => {
-            app.repo()
-                .open()?
-                .diff_all_with_archive()?
-                .persist(app, PersistMode::ResetAll)
+        PushKind::Sync => {
+            let repo = GitRepository::open(&data.repository)?.fetch()?;
+            let entries = repo.diff_commits(&data.before, &data.after)?;
+            entries
+                .persist(app, &repo, PersistMode::Incremental)
                 .await?;
+            Ok((StatusCode::OK, entries.as_summary()).into_response())
         }
-        RefKind::RebuildAll => {
-            app.repo()
-                .open()?
-                .diff_all()?
-                .persist(app, PersistMode::ResetAll)
-                .await?;
-        }
-        _ => return Ok(StatusCode::NO_CONTENT.into_response()),
-    };
+        PushKind::Rebuild => {
+            let repo = GitRepository::open(&data.repository)?.fetch()?;
+            let entries = repo.snapshot(&data.after)?;
 
-    Ok(StatusCode::OK.into_response())
+            entries.persist(app, &repo, PersistMode::ResetAll).await?;
+            Ok((StatusCode::OK, entries.as_summary()).into_response())
+        }
+        _ => Ok(StatusCode::CREATED.into_response()),
+    }
 }

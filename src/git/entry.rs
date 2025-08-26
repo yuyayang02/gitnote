@@ -10,8 +10,8 @@ use git2::{Commit, Diff};
 /// 枚举表示文件的类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileKind {
-    /// `.gitnote.toml` 文件
-    GitNote,
+    /// `.group.toml` 文件
+    Group,
     /// Markdown 文件 (`.md` 或 `.markdown`)
     Markdown,
     /// 其他文件类型
@@ -22,22 +22,22 @@ impl FileKind {
     /// 根据文件路径推断文件类型
     ///
     /// 文件类型判断规则：
-    /// - 文件名为 `.gitnote.toml` 返回 [`FileKind::GitNote`]
+    /// - 文件名为 `.group.toml` 返回 [`FileKind::Group`]
     /// - 扩展名为 `.md` 或 `.markdown` 返回 [`FileKind::Markdown`]
     /// - 其他情况返回 [`FileKind::Other`]
     ///
     /// # Example
     /// ```
     /// # use gitnote::git::FileKind;
-    /// assert_eq!(FileKind::from_path(".gitnote.toml"), FileKind::GitNote);
+    /// assert_eq!(FileKind::from_path(".group.toml"), FileKind::Group);
     /// assert_eq!(FileKind::from_path("doc.md"), FileKind::Markdown);
     /// assert_eq!(FileKind::from_path("image.png"), FileKind::Other);
     /// ```
     pub fn from_path(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name == ".gitnote.toml" {
-                return FileKind::GitNote;
+            if name == ".group.toml" {
+                return FileKind::Group;
             }
         }
 
@@ -61,7 +61,7 @@ pub enum ChangeKind {
     Deleted,
 }
 
-/// 表示 Git 仓库中一次文件或 GitNote 的变更。
+/// 表示 Git 仓库中一次文件或目录的变更。
 ///
 /// `RepoEntry` 包含文件路径、变更类型、文件类型和提交时间等信息，
 #[derive(Debug)]
@@ -101,12 +101,12 @@ impl RepoEntry {
 }
 
 /// Trait，用于将 Git `Diff` 和 `Commit` 转换为 [`RepoEntry`]。
-pub trait IntoEntry {
+pub trait IntoRepoEntry {
     /// 将类型转换为 [`RepoEntry`] 列表。
     fn into_entry(self) -> Vec<RepoEntry>;
 }
 
-impl<'a> IntoEntry for (Diff<'a>, Commit<'a>) {
+impl<'a> IntoRepoEntry for (Diff<'a>, Commit<'a>) {
     fn into_entry(self) -> Vec<RepoEntry> {
         let (diff, commit) = self;
         let timestamp = Local.timestamp_opt(commit.time().seconds(), 0).unwrap();
@@ -167,18 +167,18 @@ impl fmt::Display for RepoEntry {
     /// 格式示例：
     /// ```text
     /// [md]    + group-a/test.md @ 2024-08-22 12:30
-    /// [group] + .gitnote.toml @ 2024-08-22 12:35
+    /// [group] + .group.toml @ 2024-08-22 12:35
     /// ```
     ///
     /// 枚举跳转：
-    /// - [`FileKind::GitNote`]
+    /// - [`FileKind::Group`]
     /// - [`FileKind::Markdown`]
     /// - [`FileKind::Other`]
     /// - [`ChangeKind::Added`]
     /// - [`ChangeKind::Deleted`]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let kind_str = match self.file_kind {
-            FileKind::GitNote => "[group]",
+            FileKind::Group => "[group]",
             FileKind::Markdown => "[md]",
             FileKind::Other => "[-]",
         };
@@ -208,8 +208,7 @@ impl AsSummary for Vec<RepoEntry> {
         // 按时间从老到新排序
         // self.sort_by_key(|e| e.timestamp);
         // 转换为多行字符串
-        self
-            .into_iter()
+        self.into_iter()
             .map(|e| e.to_string())
             .collect::<Vec<_>>()
             .join("\n")
@@ -223,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_file_kind_from_path() {
-        assert_eq!(FileKind::from_path(".gitnote.toml"), FileKind::GitNote);
+        assert_eq!(FileKind::from_path(".group.toml"), FileKind::Group);
         assert_eq!(FileKind::from_path("doc.md"), FileKind::Markdown);
         assert_eq!(FileKind::from_path("notes.markdown"), FileKind::Markdown);
         assert_eq!(FileKind::from_path("image.png"), FileKind::Other);

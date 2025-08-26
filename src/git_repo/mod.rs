@@ -1,6 +1,6 @@
+mod hook;
 mod persist;
-mod ref_kind;
 pub use self::{
+    hook::{PushKind, GitPushPayload},
     persist::{PersistMode, RepoEntryPersist},
-    ref_kind::RefKind,
 };

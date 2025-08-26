@@ -30,11 +30,6 @@ impl Default for GithubAPiRenderer {
 impl GithubAPiRenderer {
     /// 使用指定的 GitHub Token 创建渲染器
     ///
-    /// ```ignore
-    /// let renderer = GithubAPiRenderer::new("your_token");
-    /// // 使用环境变量
-    /// let renderer = GithubAPiRenderer::default();
-    /// ```
     pub fn new<T: AsRef<str>>(token: T) -> Self {
         let client = reqwest::Client::builder()
             .user_agent(concat!(

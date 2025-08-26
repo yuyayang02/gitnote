@@ -3,6 +3,8 @@ use std::io;
 use axum::response::{IntoResponse, Response};
 use reqwest::StatusCode;
 
+use crate::git;
+
 pub type Result<T> = core::result::Result<T, Error>;
 
 /// 应用统一错误类型
@@ -16,9 +18,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// - 自定义错误消息 [`Error::Custom`] 或 [`Error::NotFound`]
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// Git 仓库错误
     #[error(transparent)]
-    Repository(#[from] git2::Error),
+    Git(#[from] git::GitError),
 
     /// TOML 解析错误
     #[error(transparent)]
@@ -49,7 +50,6 @@ impl IntoResponse for Error {
     /// 将 [`Error`] 转换为 HTTP 响应
     ///
     /// 错误对应的 HTTP 状态码：
-    /// - [`Error::Repository`] -> 500 Internal Server Error
     /// - [`Error::Sqlx`] -> 500 Internal Server Error
     /// - [`Error::Reqwest`] -> 502 Bad Gateway
     /// - [`Error::NotFound`] -> 404 Not Found
@@ -58,7 +58,7 @@ impl IntoResponse for Error {
     /// - [`Error::Io`] -> 500 Internal Server Error
     fn into_response(self) -> Response {
         match self {
-            Error::Repository(e) => {
+            Error::Git(e) => {
                 tracing::error!(%e, "git repo error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
             }

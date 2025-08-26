@@ -6,11 +6,6 @@ use sqlx::postgres::PgPoolOptions;
 pub type Db = sqlx::PgPool;
 
 /// 从环境变量 `DATABASE_URL` 初始化数据库连接池
-///
-/// ```ignore
-/// // 确保环境变量 DATABASE_URL 已设置
-/// storage::db::init_db_from_env().await;
-/// ```
 pub async fn init_db_from_env() -> Db {
     let conn_url = env::var("DATABASE_URL")
         .ok()
@@ -43,10 +38,6 @@ async fn new_db_poll(conn_url: &str) -> Result<Db, sqlx::Error> {
 /// 执行 SQL 文件中的迁移语句
 ///
 /// 将文件内容按 `;` 分割，每条 SQL 单独执行
-///
-/// ```ignore
-/// storage::migrate(&db, "sql/init.sql").await.unwrap();
-/// ```
 #[allow(unused)]
 pub async fn migrate(db: &Db, file: &str) -> Result<(), sqlx::Error> {
     let content = std::fs::read_to_string(file)?;

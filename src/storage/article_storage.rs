@@ -13,9 +13,6 @@ pub trait ArticleStorage {
     ///
     /// 会删除 `articles` 表和 `groups` 表中的全部内容
     ///
-    /// ```ignore
-    /// tx.reset_all().await.unwrap();
-    /// ```
     fn reset_all(&mut self) -> impl std::future::Future<Output = Result<(), sqlx::Error>> {
         async {
             sqlx::query(
@@ -33,10 +30,6 @@ pub trait ArticleStorage {
     }
 
     /// 删除指定的文章
-    ///
-    /// ```ignore
-    /// tx.remove(&article_builder).await.unwrap();
-    /// ```
     fn remove(
         &mut self,
         article_builder: &ArticleBuilder<NoContent>,
@@ -54,10 +47,6 @@ pub trait ArticleStorage {
     /// 插入或更新文章
     ///
     /// 使用 [`ON CONFLICT`] 实现“存在则更新，否则插入”
-    ///
-    /// ```ignore
-    /// tx.upsert(&article).await.unwrap();
-    /// ```
     fn upsert(
         &mut self,
         article: &Article,
@@ -93,10 +82,6 @@ pub trait ArticleStorage {
     }
 
     /// 插入或更新组
-    ///
-    /// ```ignore
-    /// tx.update_group(&group).await.unwrap();
-    /// ```
     fn update_group(
         &mut self,
         group: &Group,
@@ -124,10 +109,6 @@ pub trait ArticleStorage {
     }
 
     /// 删除组
-    ///
-    /// ```ignore
-    /// tx.remove_group(&group).await.unwrap();
-    /// ```
     fn remove_group(
         &mut self,
         group: &Group,

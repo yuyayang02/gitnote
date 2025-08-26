@@ -6,6 +6,13 @@ use serde::{Deserialize, Serialize};
 
 use super::{App, ArticleQuery, Error, Result};
 
+/// 配置文章相关路由。
+///
+/// 路由包括：
+/// - `GET /articles`：文章列表
+/// - `GET /articles/{slug}`：获取单篇文章
+/// - `GET /articles/tags`：获取所有标签
+/// - `GET /articles/categories`：获取所有分类
 pub fn setup_route() -> Router<App> {
     Router::new()
         .route("/articles", get(articles_list))
@@ -14,6 +21,7 @@ pub fn setup_route() -> Router<App> {
         .route("/articles/categories", get(articels_categories))
 }
 
+/// 文章元信息，用于列表展示。
 #[derive(Debug, Serialize)]
 pub struct ArticleMeta {
     pub slug: String,
@@ -26,6 +34,7 @@ pub struct ArticleMeta {
     pub created_at: i64,
 }
 
+/// 完整文章，包括元信息和正文。
 #[derive(Debug, Serialize)]
 pub struct ArticleFull {
     #[serde(flatten)]
@@ -34,17 +43,22 @@ pub struct ArticleFull {
     content: String,
 }
 
+/// 文章分类。
 #[derive(Debug, Serialize)]
 pub struct Category {
     id: String,
     name: String,
 }
 
+/// 文章作者。
 #[derive(Debug, Serialize)]
 pub struct Author {
     name: String,
 }
 
+/// 根据 slug 获取单篇文章。
+///
+/// 返回 [`ArticleFull`]，如果文章不存在返回 [`Error::NotFound`]。
 async fn articles_get_one(
     Path(slug): Path<String>,
     State(app): State<App>,
@@ -69,10 +83,16 @@ async fn articles_get_one(
     }))
 }
 
+/// 获取所有文章标签。
+///
+/// 返回标签列表。
 async fn articles_tags(State(app): State<App>) -> Result<Json<Vec<String>>> {
-    app.db().tags().await.map(|r| Json(r)).map_err(Into::into)
+    app.db().tags().await.map(Json).map_err(Into::into)
 }
 
+/// 获取所有文章分类。
+///
+/// 返回 [`Category`] 列表。
 async fn articels_categories(State(app): State<App>) -> Result<Json<Vec<Category>>> {
     app.db()
         .categories()
@@ -91,6 +111,7 @@ async fn articels_categories(State(app): State<App>) -> Result<Json<Vec<Category
         .map_err(Into::into)
 }
 
+/// 查询参数，用于文章列表分页和筛选。
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct QueryParams {
@@ -113,6 +134,10 @@ impl Default for QueryParams {
     }
 }
 
+/// 获取文章列表。
+///
+/// 支持分页、作者、分类和标签筛选。
+/// 返回 [`ArticleMeta`] 列表。
 async fn articles_list(
     Query(params): Query<QueryParams>,
     State(app): State<App>,

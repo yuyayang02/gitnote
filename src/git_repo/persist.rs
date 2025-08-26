@@ -1,7 +1,7 @@
 use crate::{
     app::App,
     content::{ArticleBuilder, Group},
-    git::{ChangeKind, FileKind, RepoEntry},
+    git::{ChangeKind, FileKind, GitRepository, RepoEntry},
     storage::ArticleStorage,
 };
 /// 持久化模式
@@ -24,6 +24,7 @@ pub trait RepoEntryPersist {
     fn persist(
         &self,
         app: App,
+        repo: &GitRepository,
         mode: PersistMode,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>>;
 }
@@ -44,28 +45,27 @@ impl RepoEntryPersist for Vec<RepoEntry> {
     ///     - Deleted：从数据库删除
     /// - Other 文件类型：忽略
     ///
-    /// ```ignore
-    /// // 假设 entries 是 Vec<your_crate::RepoEntry>
-    /// entries.persist(app, PersistMode::ResetAll).await.unwrap();
-    /// ```
-    async fn persist(&self, app: App, mode: PersistMode) -> Result<(), Self::Error> {
+    async fn persist(
+        &self,
+        app: App,
+        repo: &GitRepository,
+        mode: PersistMode,
+    ) -> Result<(), Self::Error> {
         let mut tx = app.db().begin().await?;
 
         if let PersistMode::ResetAll = mode {
             tx.reset_all().await?;
         };
 
-        let repo = app.repo().open()?;
-
         for entry in self {
             match (entry.file_kind(), entry.change_kind()) {
-                (FileKind::GitNote, ChangeKind::Added) => {
+                (FileKind::Group, ChangeKind::Added) => {
                     let content = repo.load_file(entry.id())?;
                     let group = Group::new(entry.path(), content)?;
                     tx.update_group(&group).await?;
                 }
 
-                (FileKind::GitNote, ChangeKind::Deleted) => {
+                (FileKind::Group, ChangeKind::Deleted) => {
                     let group = Group::empty(entry.path());
                     tx.remove_group(&group).await?;
                 }
