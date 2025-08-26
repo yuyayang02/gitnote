@@ -70,7 +70,7 @@ WORKDIR /app
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/gitnote ./
 
-COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+# COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
+# RUN chmod +x ./entrypoint.sh
 
-CMD ["./entrypoint.sh"]
+CMD ["./gitnote"]
