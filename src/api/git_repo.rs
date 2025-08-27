@@ -34,6 +34,8 @@ pub fn setup_route() -> Router<App> {
 /// 3. 调用 [`RepoEntryPersist::persist`] 将数据写入应用
 /// 4. 返回 HTTP 响应
 async fn update(State(app): State<App>, Json(data): Json<GitPushPayload>) -> Result<Response> {
+    tracing::debug!(data = ?data, "git push paylaod");
+
     let ref_kind = data.push_kind();
     match ref_kind {
         PushKind::Sync => {
@@ -44,6 +46,7 @@ async fn update(State(app): State<App>, Json(data): Json<GitPushPayload>) -> Res
                 .await?;
             Ok((StatusCode::OK, entries.as_summary()).into_response())
         }
+
         PushKind::Rebuild => {
             let repo = GitRepository::open(&data.repository)?.fetch()?;
             let entries = repo.snapshot(&data.after)?;

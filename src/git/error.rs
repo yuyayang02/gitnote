@@ -18,12 +18,8 @@ pub enum GitError {
     #[error("repository not exist")]
     NotExist,
 
-    /// 仓库配置解析失败
-    #[error("failed to parse repository config")]
-    InvalidConfig,
-
     /// 底层 git2 错误
-    #[error(transparent)]
+    #[error("{0}")]
     Git2(#[from] git2::Error),
 
     /// 底层 IO 错误
