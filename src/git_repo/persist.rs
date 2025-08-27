@@ -72,7 +72,7 @@ impl RepoEntryPersist for Vec<RepoEntry> {
 
                 (FileKind::Markdown, ChangeKind::Added) => {
                     let content = repo.load_file(entry.id())?;
-                    let article = ArticleBuilder::new(entry.path(), entry.timestamp())
+                    let article = ArticleBuilder::new(entry.path())
                         .content(content)
                         .build_with_renderer(app.renderer())
                         .await?;
@@ -80,7 +80,7 @@ impl RepoEntryPersist for Vec<RepoEntry> {
                 }
 
                 (FileKind::Markdown, ChangeKind::Deleted) => {
-                    let article_builder = ArticleBuilder::new(entry.path(), entry.timestamp());
+                    let article_builder = ArticleBuilder::new(entry.path());
                     tx.remove(&article_builder).await?;
                 }
 

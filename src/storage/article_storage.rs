@@ -74,7 +74,7 @@ pub trait ArticleStorage {
             .bind(&article.frontmatter.tags)
             .bind(&article.rendered_content)
             .bind(&article.frontmatter.datetime)
-            .bind(&article.updated_at)
+            .bind(&article.frontmatter.datetime)
             .execute(self.executor())
             .await?;
             Ok(())

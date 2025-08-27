@@ -39,7 +39,7 @@ impl<R: GitOps> GitRepository<R> {
     /// 返回对应的 [`RepoEntry`] 列表，用于查看当前 commit 的文件状态。
     pub fn snapshot(&self, commit_str: &str) -> Result<Vec<RepoEntry>, GitError> {
         let repo = self.repo();
-        let entries = repo.diff_commits_range(None, commit_str)?;
+        let entries = repo.diff_commits_range(R::EMPTY_TREE_OID, commit_str)?;
         Ok(entries)
     }
 
@@ -52,7 +52,7 @@ impl<R: GitOps> GitRepository<R> {
         new_commit_str: &str,
     ) -> Result<Vec<RepoEntry>, GitError> {
         let repo = self.repo();
-        let entries = repo.diff_commits_range(Some(&old_commit_str), &new_commit_str)?;
+        let entries = repo.diff_commits_range(&old_commit_str, &new_commit_str)?;
         Ok(entries)
     }
 

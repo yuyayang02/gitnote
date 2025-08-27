@@ -20,7 +20,6 @@ pub struct Article {
     pub slug: String,
     pub frontmatter: FrontMatter,
     pub rendered_content: String,
-    pub updated_at: DateTime<Local>,
 }
 
 pub struct NoContent;
@@ -29,7 +28,6 @@ pub struct Content(String);
 pub struct ArticleBuilder<C> {
     group: String,
     slug: String,
-    updated_at: DateTime<Local>,
     content: C,
 }
 
@@ -41,7 +39,7 @@ pub trait Renderer {
 }
 
 impl ArticleBuilder<NoContent> {
-    pub fn new(path: impl AsRef<Path>, updated_at: DateTime<Local>) -> Self {
+    pub fn new(path: impl AsRef<Path>) -> Self {
         // 去除文件扩展名
         // let name: String = slug.into();
         let path = path.as_ref();
@@ -58,7 +56,6 @@ impl ArticleBuilder<NoContent> {
         Self {
             group,
             slug,
-            updated_at,
             content: NoContent,
         }
     }
@@ -67,7 +64,6 @@ impl ArticleBuilder<NoContent> {
         ArticleBuilder {
             group: self.group,
             slug: self.slug,
-            updated_at: self.updated_at,
             content: Content(md_content.into()),
         }
     }
@@ -120,7 +116,6 @@ impl ArticleBuilder<Content> {
         Ok(Article {
             group: self.group,
             slug: self.slug,
-            updated_at: self.updated_at,
             frontmatter,
             rendered_content,
         })
@@ -161,7 +156,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
 
     // 模拟 Renderer：只包裹一层 <rendered> 标签
     struct FakeRenderer;
@@ -197,8 +191,7 @@ This is the body of the article.
         let markdown = sample_markdown();
 
         // 注意 ArticleBuilder::new 需要 path 和 updated_at
-        let builder =
-            ArticleBuilder::new("group-a/test-article.md", Local::now()).content(markdown);
+        let builder = ArticleBuilder::new("group-a/test-article.md").content(markdown);
         let article = builder
             .build_with_renderer(&FakeRenderer)
             .await
@@ -242,8 +235,7 @@ This is the body of the article.
 This article has no TOML front matter.
 "#;
 
-        let builder =
-            ArticleBuilder::new("group-a/invalid-article.md", Local::now()).content(markdown);
+        let builder = ArticleBuilder::new("group-a/invalid-article.md").content(markdown);
         let result = builder.build_with_renderer(&FakeRenderer).await;
 
         assert!(result.is_err(), "Should fail due to missing front matter");

@@ -26,13 +26,6 @@ impl FileKind {
     /// - 扩展名为 `.md` 或 `.markdown` 返回 [`FileKind::Markdown`]
     /// - 其他情况返回 [`FileKind::Other`]
     ///
-    /// # Example
-    /// ```
-    /// # use gitnote::git::FileKind;
-    /// assert_eq!(FileKind::from_path(".group.toml"), FileKind::Group);
-    /// assert_eq!(FileKind::from_path("doc.md"), FileKind::Markdown);
-    /// assert_eq!(FileKind::from_path("image.png"), FileKind::Other);
-    /// ```
     pub(super) fn from_path(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
@@ -205,6 +198,10 @@ pub trait AsSummary {
 
 impl AsSummary for Vec<RepoEntry> {
     fn as_summary(&self) -> String {
+        if self.is_empty() {
+            return "No entries".to_string();
+        }
+        
         // 按时间从老到新排序
         // self.sort_by_key(|e| e.timestamp);
         // 转换为多行字符串
