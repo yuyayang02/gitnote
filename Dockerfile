@@ -2,6 +2,7 @@
 # 使用带musl工具链的Rust基础镜像
 FROM clux/muslrust:1.85.0-stable-2025-03-18 AS chef
 
+ENV TZ=Asia/Shanghai
 # 设置工作目录
 WORKDIR /app
 

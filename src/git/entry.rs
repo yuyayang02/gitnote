@@ -183,11 +183,10 @@ impl fmt::Display for RepoEntry {
 
         write!(
             f,
-            "{:<7} {} {} @ {}",
+            "{:<7} {} {}",
             kind_str,
             change_str,
             self.path.display(),
-            self.timestamp.format("%Y-%m-%d %H:%M")
         )
     }
 }
