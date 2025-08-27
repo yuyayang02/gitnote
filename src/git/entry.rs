@@ -104,36 +104,45 @@ impl<'a> IntoRepoEntry for (Diff<'a>, Commit<'a>) {
         let (diff, commit) = self;
         let timestamp = Local.timestamp_opt(commit.time().seconds(), 0).unwrap();
 
-        let mut final_map: HashMap<&Path, ChangeKind> = HashMap::new();
+        // 1. 累积每个文件的最终变化
+        let mut final_map: HashMap<&Path, (git2::DiffFile, ChangeKind)> = HashMap::new();
 
-        diff.deltas()
-            .flat_map(|d| match d.status() {
+        for delta in diff.deltas() {
+            let changes = match delta.status() {
                 git2::Delta::Added | git2::Delta::Copied => {
-                    vec![(d.new_file(), ChangeKind::Added)]
+                    vec![(delta.new_file(), ChangeKind::Added)]
                 }
-                git2::Delta::Deleted => vec![(d.old_file(), ChangeKind::Deleted)],
-                git2::Delta::Modified => vec![
-                    (d.old_file(), ChangeKind::Deleted),
-                    (d.new_file(), ChangeKind::Added),
-                ],
-                git2::Delta::Renamed => vec![
-                    (d.old_file(), ChangeKind::Deleted),
-                    (d.new_file(), ChangeKind::Added),
+                git2::Delta::Deleted => vec![(delta.old_file(), ChangeKind::Deleted)],
+                git2::Delta::Modified | git2::Delta::Renamed => vec![
+                    (delta.old_file(), ChangeKind::Deleted),
+                    (delta.new_file(), ChangeKind::Added),
                 ],
                 _ => vec![],
-            })
-            .filter_map(|(file, change)| {
-                let path = file.path()?;
-                let real_change = merge_change(final_map.get(&path), change)?;
-                final_map.insert(path, real_change);
+            };
 
-                Some(RepoEntry {
-                    id: file.id().to_string(),
-                    path: path.to_path_buf(),
-                    change_kind: real_change,
-                    file_kind: FileKind::from_path(path),
-                    timestamp,
-                })
+            for (file, change) in changes {
+                if let Some(path) = file.path() {
+                    match merge_change(final_map.get(path).map(|(_, c)| c), change) {
+                        Some(real_change) => {
+                            final_map.insert(path, (file, real_change));
+                        }
+                        None => {
+                            final_map.remove(path);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 生成最终 RepoEntry
+        final_map
+            .into_iter()
+            .map(|(path, (file, change_kind))| RepoEntry {
+                id: file.id().to_string(),
+                path: path.to_path_buf(),
+                change_kind,
+                file_kind: FileKind::from_path(path),
+                timestamp,
             })
             .collect()
     }
@@ -181,13 +190,7 @@ impl fmt::Display for RepoEntry {
             ChangeKind::Deleted => "-",
         };
 
-        write!(
-            f,
-            "{:<7} {} {}",
-            kind_str,
-            change_str,
-            self.path.display(),
-        )
+        write!(f, "{:<7} {} {}", kind_str, change_str, self.path.display(),)
     }
 }
 
@@ -200,7 +203,7 @@ impl AsSummary for Vec<RepoEntry> {
         if self.is_empty() {
             return "No entries".to_string();
         }
-        
+
         // 按时间从老到新排序
         // self.sort_by_key(|e| e.timestamp);
         // 转换为多行字符串
