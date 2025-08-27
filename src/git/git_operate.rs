@@ -88,7 +88,7 @@ pub struct AsyncRepository {
 
 impl AsyncRepository {
     /// 构造新的异步仓库封装。
-    pub fn new(repo: Repository) -> Self {
+    pub(super) fn new(repo: Repository) -> Self {
         Self {
             inner: Arc::new(Mutex::new(repo)),
         }

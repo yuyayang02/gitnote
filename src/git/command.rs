@@ -1,15 +1,26 @@
 use std::path::Path;
 
+use crate::git::RepoDir;
+
 use super::GitError;
 
-pub struct GitCommand;
+/// 提供基于命令行 `git` 的仓库操作。
+///
+/// 与 [`git2`] API 相比，这里直接调用系统上的 `git` 命令，
+/// 适合需要复用现有 `git` 行为的场景。
+pub(super) struct GitCommand;
 
 impl GitCommand {
-    pub fn remote_update(path: impl AsRef<Path>) -> Result<(), GitError> {
+    /// 在指定仓库目录执行 `git remote update`。
+    ///
+    /// 当需要强制与远程保持一致时使用。
+    pub fn remote_update(name: impl AsRef<Path>) -> Result<(), GitError> {
+        let repo_path = RepoDir::path(name);
+
         let output = std::process::Command::new("git")
             .arg("remote")
             .arg("update")
-            .current_dir(path.as_ref())
+            .current_dir(repo_path)
             .output()?;
 
         if output.status.success() {
@@ -21,32 +32,44 @@ impl GitCommand {
         }
     }
 
-    pub fn clone_or_fetch(name: impl AsRef<str>, remote: impl AsRef<str>) -> String {
-        let target = format!("{}.git", name.as_ref());
-        let repo_path = Path::new(&target);
+    /// 克隆或更新远程仓库。
+    ///
+    /// - 如果目录已存在，则执行 `git remote update`
+    /// - 如果目录不存在，则执行 `git clone --mirror`
+    ///
+    /// 常用于确保本地有一份最新的镜像仓库。
+    pub fn clone_or_fetch(name: impl AsRef<Path>, remote: impl AsRef<str>) {
+        let repo_path = RepoDir::path(name);
+
         let remote = remote.as_ref();
 
         if repo_path.exists() {
             tracing::debug!(
                 "Repository '{}' exists, running 'git remote update'",
-                target
+                repo_path.display()
             );
             let output = std::process::Command::new("git")
                 .args(["remote", "update"])
-                .current_dir(repo_path)
+                .current_dir(&repo_path)
                 .output()
                 .expect("Failed to start git process");
 
             if !output.status.success() {
                 let stderr_str = String::from_utf8_lossy(&output.stderr);
-                panic!("git remote update failed for '{}': {}", target, stderr_str);
+                panic!(
+                    "git remote update failed for '{}': {}",
+                    repo_path.display(),
+                    stderr_str
+                );
             } else {
-                tracing::debug!("git remote update succeeded for '{}'", target);
+                tracing::debug!("git remote update succeeded for '{}'", repo_path.display());
             }
         } else {
-            tracing::debug!("Cloning repository '{}' from '{}'", target, remote);
+            tracing::debug!("Cloning into '{}' from '{}'", repo_path.display(), remote);
+
             let output = std::process::Command::new("git")
-                .args(["clone", "--mirror", remote, &target])
+                .args(["clone", "--mirror", remote])
+                .arg(&repo_path)
                 .output()
                 .expect("Failed to start git process");
 
@@ -54,82 +77,17 @@ impl GitCommand {
                 let stderr_str = String::from_utf8_lossy(&output.stderr);
                 panic!(
                     "git clone --mirror '{}' '{}' failed: {}",
-                    remote, target, stderr_str
+                    remote,
+                    repo_path.display(),
+                    stderr_str
                 );
             } else {
-                tracing::debug!("git clone succeeded: '{}' -> '{}'", remote, target);
+                tracing::debug!(
+                    "git clone succeeded: '{}' -> '{}'",
+                    remote,
+                    repo_path.display()
+                );
             }
         }
-        target
-    }
-}
-
-/// 根据配置字符串初始化多个 Git 仓库。
-///
-/// 配置格式为 `name=url`，多个仓库用逗号分隔。例如：
-///
-/// ```text
-/// repo1=https://example.com/repo1.git,repo2=https://example.com/repo2.git
-/// ```
-///
-/// 对每个仓库，尝试 clone 或 fetch，保证本地仓库是最新状态。
-///
-/// # Panics
-///
-/// 当配置格式不符合 `name=url` 时会触发 panic。
-pub fn init_git_repositories(config: String) -> Vec<String> {
-    let mut result = vec![];
-    for entry in config.split(',') {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-
-        if let Some((name, url)) = entry.split_once('=') {
-            let name = name.trim();
-            let url = url.trim();
-            tracing::debug!("Initializing repository '{}' from '{}'", name, url);
-
-            let path = GitCommand::clone_or_fetch(name, url);
-            result.push(path);
-        } else {
-            panic!(
-                "Invalid repository entry: '{}'. Expected format: name=url",
-                entry
-            );
-        }
-    }
-
-    result
-}
-
-/// 从环境变量 `REPO_CONFIG` 初始化 Git 仓库。
-///
-/// # Panics
-///
-/// 如果环境变量未设置会触发 panic。
-pub fn init_git_repositories_from_env() {
-    let config = std::env::var("REPO_CONFIG").expect("REPO_CONFIG not set");
-    init_git_repositories(config);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    #[ignore = "需要操作主机目录"]
-    fn test_init_git_repositories() {
-        tracing_subscriber::fmt()
-            .with_target(false)
-            .with_timer(tracing_subscriber::fmt::time::ChronoLocal::new(
-                "%Y-%m-%d %H:%M:%S%.3f".to_string(),
-            ))
-            .with_env_filter(tracing_subscriber::EnvFilter::from_env("GITNOTE_LOG"))
-            .init();
-
-        let repo_config =
-            "repo_test1=gitnote.git,repo_test2=git@github.com:octocat/Hello-World.git";
-        init_git_repositories(repo_config.to_string());
     }
 }

@@ -23,7 +23,7 @@ pub struct GitPushPayload {
     pub after: String,
     /// 执行 push 的用户名或邮箱
     pub pusher: String,
-    /// 仓库名称或路径
+    /// 仓库名称（不带 .git）
     pub repository: String,
 }
 

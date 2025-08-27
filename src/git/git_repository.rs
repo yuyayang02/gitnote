@@ -1,17 +1,22 @@
+use std::path::Path;
+
 use git2::Repository;
+
+use crate::git::RepoDir;
 
 use super::{AsyncRepository, GitError, GitOps, RepoEntry};
 
-/// 内部持有具体的 [`GitRepository`] 实例，用于执行 Git 操作。
+/// 内部持有实现了 [`GitOps`] 的实例，用于执行 Git 操作。
 #[derive(Debug)]
 pub struct GitRepository<R: GitOps>(R);
 
 impl GitRepository<AsyncRepository> {
     /// 打开一个裸仓库并返回 [`GitRepository`] 实例。
     ///
-    /// 仓库路径基于传入的名称，默认加 `.git` 后缀。
-    pub fn open(repo_name: impl AsRef<str>) -> Result<Self, GitError> {
-        let repo_path = format!("{}.git", repo_name.as_ref());
+    /// 仓库路径基于传入的名称
+    pub fn open(repo_name: impl AsRef<Path>) -> Result<Self, GitError> {
+        let repo_path = RepoDir::path(repo_name);
+
         let repo = Repository::open_bare(repo_path)?;
         Ok(Self(AsyncRepository::new(repo)))
     }

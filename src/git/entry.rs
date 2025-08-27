@@ -33,7 +33,7 @@ impl FileKind {
     /// assert_eq!(FileKind::from_path("doc.md"), FileKind::Markdown);
     /// assert_eq!(FileKind::from_path("image.png"), FileKind::Other);
     /// ```
-    pub fn from_path(path: impl AsRef<Path>) -> Self {
+    pub(super) fn from_path(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
             if name == ".group.toml" {
@@ -101,7 +101,7 @@ impl RepoEntry {
 }
 
 /// Trait，用于将 Git `Diff` 和 `Commit` 转换为 [`RepoEntry`]。
-pub trait IntoRepoEntry {
+pub(super) trait IntoRepoEntry {
     /// 将类型转换为 [`RepoEntry`] 列表。
     fn into_entry(self) -> Vec<RepoEntry>;
 }
