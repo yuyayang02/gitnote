@@ -68,12 +68,17 @@ impl<R: GitOps> GitRepository<R> {
 
 #[cfg(test)]
 mod tests {
+    use crate::git::AsSummary;
+
     use super::*;
 
     #[test]
+    #[ignore = "需要有效的git仓库"]
     fn test_diff_commits() {
         let repo = GitRepository::open("gitnote").unwrap();
-        let entries = repo.snapshot("84779e0a9461e9130b5ad09241349b2c9a9619a3").unwrap();
-        dbg!(entries);
+        let entries = repo
+            .snapshot("84779e0a9461e9130b5ad09241349b2c9a9619a3")
+            .unwrap();
+        println!("{}", entries.as_summary());
     }
 }

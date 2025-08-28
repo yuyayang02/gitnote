@@ -49,6 +49,8 @@ impl FileKind {
 pub enum ChangeKind {
     /// 新增
     Added,
+    /// 更改
+    Modified,
     /// 删除
     Deleted,
 }
@@ -104,18 +106,15 @@ impl<'a> IntoRepoEntry for (Diff<'a>, Commit<'a>) {
         let timestamp = Local.timestamp_opt(commit.time().seconds(), 0).unwrap();
 
         diff.deltas()
-            .flat_map(|d| match d.status() {
-                git2::Delta::Added | git2::Delta::Copied => {
-                    vec![(d.new_file(), ChangeKind::Added)]
-                }
-                git2::Delta::Deleted => vec![(d.old_file(), ChangeKind::Deleted)],
-                git2::Delta::Modified | git2::Delta::Renamed => vec![
-                    (d.old_file(), ChangeKind::Deleted),
-                    (d.new_file(), ChangeKind::Added),
-                ],
-                _ => vec![],
-            })
-            .filter_map(|(file, change_kind)| {
+            .filter_map(|d| {
+                let (file, change_kind) = match d.status() {
+                    git2::Delta::Added | git2::Delta::Copied => (d.new_file(), ChangeKind::Added),
+                    git2::Delta::Deleted => (d.old_file(), ChangeKind::Deleted),
+                    git2::Delta::Modified => (d.new_file(), ChangeKind::Modified),
+                    git2::Delta::Renamed => (d.new_file(), ChangeKind::Modified), // 重命名也可以算作修改
+                    _ => return None,
+                };
+
                 let path = file.path()?;
                 Some(RepoEntry {
                     id: file.id().to_string(),
@@ -128,21 +127,25 @@ impl<'a> IntoRepoEntry for (Diff<'a>, Commit<'a>) {
             .collect()
     }
 }
-/// 合并旧的变更状态和新的变更状态。
+
+/// 合并旧的变更状态和新的变更状态，返回合并后的结果。
 ///
-/// 规则说明：
-/// - [`ChangeKind::Added`] -> [`ChangeKind::Deleted`] = 消失 (返回 None)
-/// - [`ChangeKind::Deleted`] -> [`ChangeKind::Added`] = [`ChangeKind::Added`]
-/// - 其他情况保持最新状态
+/// 合并规则：
+/// — [`ChangeKind::Added`] -> [`ChangeKind::Deleted`] = 消失 (返回 `None`)
+/// — [`ChangeKind::Deleted`] -> [`ChangeKind::Added`] = [`ChangeKind::Added`]
+/// — 新增后修改 (`Added` -> `Modified`) = [`ChangeKind::Modified`]
+/// — 其他情况保持最新状态或按逻辑覆盖
 fn merge_change(old: Option<&ChangeKind>, new: ChangeKind) -> Option<ChangeKind> {
     match (old, new) {
         (None, now) => Some(now),
-        (Some(ChangeKind::Added), ChangeKind::Added) => Some(ChangeKind::Added),
+        (Some(ChangeKind::Deleted), new) => Some(new),
         (Some(ChangeKind::Added), ChangeKind::Deleted) => None,
-        (Some(ChangeKind::Deleted), ChangeKind::Added) => Some(ChangeKind::Added),
-        (Some(ChangeKind::Deleted), ChangeKind::Deleted) => Some(ChangeKind::Deleted),
+        (Some(ChangeKind::Added), _) => Some(ChangeKind::Modified),
+        (Some(ChangeKind::Modified), ChangeKind::Deleted) => Some(ChangeKind::Deleted),
+        (Some(ChangeKind::Modified), _) => Some(ChangeKind::Modified),
     }
 }
+
 /// 定义对一组 [`RepoEntry`] 进行裁剪的行为。
 ///
 /// 用于在序列中合并或抵消重复的文件变更，得到精简后的最终结果。
@@ -212,6 +215,7 @@ impl fmt::Display for RepoEntry {
         let change_str = match self.change_kind {
             ChangeKind::Added => "+",
             ChangeKind::Deleted => "-",
+            ChangeKind::Modified => "~",
         };
 
         write!(
@@ -249,6 +253,7 @@ impl AsSummary for Vec<RepoEntry> {
 mod tests {
     use super::*;
     use chrono::Local;
+    use std::path::PathBuf;
 
     #[test]
     fn test_file_kind_from_path() {
@@ -266,23 +271,27 @@ mod tests {
         // 没有旧状态
         assert_eq!(merge_change(None, Added), Some(Added));
         assert_eq!(merge_change(None, Deleted), Some(Deleted));
+        assert_eq!(merge_change(None, Modified), Some(Modified));
 
-        // Added -> Added
-        assert_eq!(merge_change(Some(&Added), Added), Some(Added));
-
-        // Added -> Deleted → None
+        // Added -> Added / Modified / Deleted
+        assert_eq!(merge_change(Some(&Added), Added), Some(Modified));
+        assert_eq!(merge_change(Some(&Added), Modified), Some(Modified));
         assert_eq!(merge_change(Some(&Added), Deleted), None);
 
-        // Deleted -> Added → Added
+        // Deleted -> Added / Deleted / Modified
         assert_eq!(merge_change(Some(&Deleted), Added), Some(Added));
-
-        // Deleted -> Deleted → Deleted
         assert_eq!(merge_change(Some(&Deleted), Deleted), Some(Deleted));
+        assert_eq!(merge_change(Some(&Deleted), Modified), Some(Modified));
+
+        // Modified -> Added / Deleted / Modified
+        assert_eq!(merge_change(Some(&Modified), Added), Some(Modified));
+        assert_eq!(merge_change(Some(&Modified), Deleted), Some(Deleted));
+        assert_eq!(merge_change(Some(&Modified), Modified), Some(Modified));
     }
 
     #[test]
     fn test_repo_entry_display() {
-        let entry = RepoEntry {
+        let entry_added = RepoEntry {
             id: "123".to_string(),
             path: PathBuf::from("group-a/test.md"),
             change_kind: ChangeKind::Added,
@@ -290,10 +299,24 @@ mod tests {
             timestamp: Local.with_ymd_and_hms(2024, 8, 22, 12, 30, 0).unwrap(),
         };
 
-        let output = format!("{}", entry);
-        assert!(output.contains("[md]"));
-        assert!(output.contains("+"));
-        assert!(output.contains("group-a/test.md"));
-        assert!(output.contains("2024-08-22 12:30"));
+        let entry_modified = RepoEntry {
+            id: "124".to_string(),
+            path: PathBuf::from("group-a/updated.md"),
+            change_kind: ChangeKind::Modified,
+            file_kind: FileKind::Markdown,
+            timestamp: Local.with_ymd_and_hms(2024, 8, 22, 12, 35, 0).unwrap(),
+        };
+
+        let output_added = format!("{}", entry_added);
+        assert!(output_added.contains("[md]"));
+        assert!(output_added.contains("+"));
+        assert!(output_added.contains("group-a/test.md"));
+        assert!(output_added.contains("2024-08-22 12:30"));
+
+        let output_modified = format!("{}", entry_modified);
+        assert!(output_modified.contains("[md]"));
+        assert!(output_modified.contains("~")); // Modified 使用 ~ 符号
+        assert!(output_modified.contains("group-a/updated.md"));
+        assert!(output_modified.contains("2024-08-22 12:35"));
     }
 }

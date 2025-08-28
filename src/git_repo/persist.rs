@@ -59,7 +59,7 @@ impl RepoEntryPersist for Vec<RepoEntry> {
 
         for entry in self {
             match (entry.file_kind(), entry.change_kind()) {
-                (FileKind::Group, ChangeKind::Added) => {
+                (FileKind::Group, ChangeKind::Added | ChangeKind::Modified) => {
                     let content = repo.load_file(entry.id())?;
                     let group = Group::new(entry.path(), content)?;
                     tx.update_group(&group).await?;
@@ -70,7 +70,7 @@ impl RepoEntryPersist for Vec<RepoEntry> {
                     tx.remove_group(&group).await?;
                 }
 
-                (FileKind::Markdown, ChangeKind::Added) => {
+                (FileKind::Markdown, ChangeKind::Added | ChangeKind::Modified) => {
                     let content = repo.load_file(entry.id())?;
                     let article = ArticleBuilder::new(entry.path())
                         .content(content)
