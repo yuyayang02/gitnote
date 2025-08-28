@@ -65,3 +65,15 @@ impl<R: GitOps> GitRepository<R> {
             .ok_or(GitError::NotFound)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_diff_commits() {
+        let repo = GitRepository::open("gitnote").unwrap();
+        let entries = repo.snapshot("84779e0a9461e9130b5ad09241349b2c9a9619a3").unwrap();
+        dbg!(entries);
+    }
+}

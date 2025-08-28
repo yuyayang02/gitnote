@@ -7,15 +7,15 @@ mod repo_path;
 
 use self::{
     command::GitCommand,
-    entry::IntoRepoEntry,
+    entry::{IntoRepoEntry, RepoEntryPrune},
     git_operate::{AsyncRepository, GitOps},
     repo_path::RepoDir,
 };
 
 pub use self::{
-    repo_path::init_git_repositories_from_env,
     entry::{AsSummary, ChangeKind, FileKind, RepoEntry},
     error::GitError,
+    repo_path::init_git_repositories_from_env,
 };
 
 pub type GitRepository = git_repository::GitRepository<AsyncRepository>;

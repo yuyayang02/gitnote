@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fmt,
     path::{Path, PathBuf},
 };
@@ -104,45 +103,27 @@ impl<'a> IntoRepoEntry for (Diff<'a>, Commit<'a>) {
         let (diff, commit) = self;
         let timestamp = Local.timestamp_opt(commit.time().seconds(), 0).unwrap();
 
-        // 1. 累积每个文件的最终变化
-        let mut final_map: HashMap<&Path, (git2::DiffFile, ChangeKind)> = HashMap::new();
-
-        for delta in diff.deltas() {
-            let changes = match delta.status() {
+        diff.deltas()
+            .flat_map(|d| match d.status() {
                 git2::Delta::Added | git2::Delta::Copied => {
-                    vec![(delta.new_file(), ChangeKind::Added)]
+                    vec![(d.new_file(), ChangeKind::Added)]
                 }
-                git2::Delta::Deleted => vec![(delta.old_file(), ChangeKind::Deleted)],
+                git2::Delta::Deleted => vec![(d.old_file(), ChangeKind::Deleted)],
                 git2::Delta::Modified | git2::Delta::Renamed => vec![
-                    (delta.old_file(), ChangeKind::Deleted),
-                    (delta.new_file(), ChangeKind::Added),
+                    (d.old_file(), ChangeKind::Deleted),
+                    (d.new_file(), ChangeKind::Added),
                 ],
                 _ => vec![],
-            };
-
-            for (file, change) in changes {
-                if let Some(path) = file.path() {
-                    match merge_change(final_map.get(path).map(|(_, c)| c), change) {
-                        Some(real_change) => {
-                            final_map.insert(path, (file, real_change));
-                        }
-                        None => {
-                            final_map.remove(path);
-                        }
-                    }
-                }
-            }
-        }
-
-        // 生成最终 RepoEntry
-        final_map
-            .into_iter()
-            .map(|(path, (file, change_kind))| RepoEntry {
-                id: file.id().to_string(),
-                path: path.to_path_buf(),
-                change_kind,
-                file_kind: FileKind::from_path(path),
-                timestamp,
+            })
+            .filter_map(|(file, change_kind)| {
+                let path = file.path()?;
+                Some(RepoEntry {
+                    id: file.id().to_string(),
+                    path: path.to_path_buf(),
+                    change_kind,
+                    file_kind: FileKind::from_path(path),
+                    timestamp,
+                })
             })
             .collect()
     }
@@ -160,6 +141,49 @@ fn merge_change(old: Option<&ChangeKind>, new: ChangeKind) -> Option<ChangeKind>
         (Some(ChangeKind::Added), ChangeKind::Deleted) => None,
         (Some(ChangeKind::Deleted), ChangeKind::Added) => Some(ChangeKind::Added),
         (Some(ChangeKind::Deleted), ChangeKind::Deleted) => Some(ChangeKind::Deleted),
+    }
+}
+/// 定义对一组 [`RepoEntry`] 进行裁剪的行为。
+///
+/// 用于在序列中合并或抵消重复的文件变更，得到精简后的最终结果。
+pub trait RepoEntryPrune {
+    fn prune(self) -> Vec<RepoEntry>;
+}
+
+impl RepoEntryPrune for Vec<RepoEntry> {
+    /// 对变更序列进行裁剪，合并同一路径的连续修改，去掉无效的抵消操作。
+    ///
+    /// 返回的结果只包含必要的文件变更，便于后续处理。
+    fn prune(self) -> Vec<RepoEntry> {
+        use std::collections::HashMap;
+
+        let mut state: HashMap<std::path::PathBuf, usize> = HashMap::new();
+        let mut result: Vec<Option<RepoEntry>> = (0..self.len()).map(|_| None).collect();
+
+        for (idx, mut entry) in self.into_iter().enumerate() {
+            let path = entry.path.clone();
+            match merge_change(
+                state
+                    .get(&path)
+                    .and_then(|&i| result[i].as_ref().map(|e: &RepoEntry| &e.change_kind)),
+                entry.change_kind,
+            ) {
+                Some(real_change) => {
+                    entry.change_kind = real_change;
+                    if let Some(prev_idx) = state.insert(path, idx) {
+                        result[prev_idx] = None;
+                    }
+                    result[idx] = Some(entry);
+                }
+                None => {
+                    if let Some(prev_idx) = state.remove(&path) {
+                        result[prev_idx] = None;
+                    }
+                }
+            }
+        }
+
+        result.into_iter().flatten().collect()
     }
 }
 
@@ -190,7 +214,14 @@ impl fmt::Display for RepoEntry {
             ChangeKind::Deleted => "-",
         };
 
-        write!(f, "{:<7} {} {}", kind_str, change_str, self.path.display(),)
+        write!(
+            f,
+            "{:<7} {} {} @ {}",
+            kind_str,
+            change_str,
+            self.path.display(),
+            self.timestamp.format("%Y-%m-%d %H:%M")
+        )
     }
 }
 

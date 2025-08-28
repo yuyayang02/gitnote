@@ -4,7 +4,7 @@ use git2::{Oid, Repository, Sort};
 
 use crate::git::IntoRepoEntry;
 
-use super::{GitCommand, GitError, RepoEntry};
+use super::{GitCommand, GitError, RepoEntry, RepoEntryPrune};
 /// 提供对 Git 仓库的常用操作。
 ///
 /// 实现 [`GitOps`] 可以方便地执行 commit 差异分析、远程更新和文件读取等操作。
@@ -66,9 +66,9 @@ impl GitOps for Repository {
                 Some((diff, commit))
             })
             .flat_map(IntoRepoEntry::into_entry)
-            .collect();
+            .collect::<Vec<_>>();
 
-        Ok(entries)
+        Ok(entries.prune())
     }
 
     /// 更新远程仓库。
