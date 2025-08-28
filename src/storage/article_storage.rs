@@ -57,14 +57,14 @@ pub trait ArticleStorage {
                 INSERT INTO articles
                     (slug, group_path, title, summary, tags, content, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (group_path, slug)
+                ON CONFLICT (slug)
                 DO UPDATE SET
-                    group_path = $2,
-                    title = $3,
-                    summary = $4,
-                    tags = $5,
-                    content = $6,
-                    updated_at = $8
+                    group_path = EXCLUDED.group_path,
+                    title = EXCLUDED.title,
+                    summary = EXCLUDED.summary,
+                    tags = EXCLUDED.tags,
+                    content = EXCLUDED.content,
+                    updated_at = EXCLUDED.updated_at
                 ",
             )
             .bind(&article.slug)
