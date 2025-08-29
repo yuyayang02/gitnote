@@ -2,7 +2,6 @@
 # 使用带musl工具链的Rust基础镜像
 FROM clux/muslrust:1.85.0-stable-2025-03-18 AS chef
 
-ENV TZ=Asia/Shanghai
 # 设置工作目录
 WORKDIR /app
 
@@ -74,12 +73,15 @@ RUN apk update
 # 安装必要软件
 RUN apk add --no-cache \
     git \
-    openssh
+    openssh \
+    tzdata
+
+RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+&& echo "Asia/Shanghai" > /etc/timezone
+
+ENV TZ=Asia/Shanghai
 
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/gitnote ./
-
-# COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
-# RUN chmod +x ./entrypoint.sh
 
 CMD ["./gitnote"]

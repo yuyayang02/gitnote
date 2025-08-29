@@ -6,3 +6,4 @@ gitnote.git
 authorized_keys
 /.cargo
 .env
+repositories
