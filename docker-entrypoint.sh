@@ -30,10 +30,11 @@ fi
 
 
 # --- 3. 固定 authorized_keys ---
+GIT_HOME=/home/git
 if [ -f "${SSH_AUTHORIZED_KEYS_FILE}" ]; then
     mkdir -p "${GIT_HOME}/.ssh"
     cp "${SSH_AUTHORIZED_KEYS_FILE}" "${GIT_HOME}/.ssh/authorized_keys"
-    chown -R "${GIT_USER}:${GIT_GROUP}" "${GIT_HOME}/.ssh"
+    chown -R "git:git" "${GIT_HOME}/.ssh"
     chmod 700 "${GIT_HOME}/.ssh"
     chmod 600 "${GIT_HOME}/.ssh/authorized_keys"
 else
@@ -55,7 +56,7 @@ if [ ! -d "$GIT_REPO_PATH" ]; then
 fi
 
 # 设置权限
-chown -R "$GIT_USER:$GIT_GROUP" "$GIT_REPO_PATH"
+chown -R "git:git" "$GIT_REPO_PATH"
 find "$GIT_REPO_PATH" -type f -exec chmod u=rwX,go=rX '{}' \;
 find "$GIT_REPO_PATH" -type d -exec chmod u=rwx,go=rx '{}' \;
 
@@ -79,20 +80,23 @@ if [ -d "$GIT_REPO_PATH" ]; then
     HOOKS_DIR_REPO="$GIT_REPO_PATH/hooks"
     mkdir -p "$HOOKS_DIR_REPO"
 
-    # 遍历公共 hooks 目录
     if [ -d "$HOOKS_DIR" ]; then
         for hook_script in "$HOOKS_DIR"/*; do
-            [ -f "$hook_script" ] || continue  # 跳过非文件
+            [ -f "$hook_script" ] || continue
             hook_name=$(basename "$hook_script")
 
-            # 在仓库 hooks 中创建调用公共脚本的 hook
+            # 确保公共 hook 可执行
+            chmod +x "$hook_script"
+            chown git:git "$hook_script"
+
+            # 在仓库 hooks 中创建调用器
             cat > "$HOOKS_DIR_REPO/$hook_name" <<EOF
 #!/bin/sh
-"$HOOKS_DIR/$hook_name" "\$@"
+exec "$HOOKS_DIR/$hook_name" "\$@"
 EOF
 
             chmod +x "$HOOKS_DIR_REPO/$hook_name"
-            chown "git:git" "$HOOKS_DIR_REPO/$hook_name"
+            chown git:git "$HOOKS_DIR_REPO/$hook_name"
         done
     else
         echo "warning: hooks directory $HOOKS_DIR does not exist"
@@ -100,9 +104,10 @@ EOF
 fi
 
 
+
 # --- 启动 SSH 服务 ---
 # /usr/sbin/sshd 默认会以守护进程模式启动（除非使用 -D 前台模式）
-/usr/sbin/sshd -D
+/usr/sbin/sshd
 
 # --- 执行容器 CMD 或传入的命令 ---
 # exec 会用传入的命令替换当前 shell 进程
