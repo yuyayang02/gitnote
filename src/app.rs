@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use crate::{render::GithubAPiRenderer, storage::Db};
 
@@ -8,14 +8,18 @@ use crate::{render::GithubAPiRenderer, storage::Db};
 #[derive(Clone)]
 pub struct App {
     db: Arc<Db>,
+    repo_path: Arc<Path>,
     renderer: GithubAPiRenderer,
 }
 
 impl App {
     /// 创建一个新的 [`App`] 实例
-    pub fn new(db: Db, renderer: GithubAPiRenderer) -> App {
+    pub fn new(db: Db, renderer: GithubAPiRenderer, repo_path: impl AsRef<Path>) -> App {
+        let repo_path = Arc::<Path>::from(repo_path.as_ref());
+
         Self {
             db: Arc::new(db),
+            repo_path,
             renderer,
         }
     }
@@ -32,5 +36,9 @@ impl App {
     /// 返回 [`GithubAPiRenderer`] 的引用。
     pub fn renderer(&self) -> &GithubAPiRenderer {
         &self.renderer
+    }
+
+    pub fn repo_path(&self) -> &Path {
+        &self.repo_path
     }
 }

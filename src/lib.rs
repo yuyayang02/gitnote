@@ -7,6 +7,8 @@ pub mod git_repo;
 pub mod render;
 pub mod storage;
 
+use std::env;
+
 use tracing_subscriber::{EnvFilter, fmt::time::ChronoLocal};
 
 use app::App;
@@ -18,12 +20,15 @@ pub async fn run() {
         .with_env_filter(EnvFilter::from_env("GITNOTE_LOG"))
         .init();
 
-    git::init_git_repositories_from_env();
-
     let app = App::new(
         storage::init_db_from_env().await,
         render::GithubAPiRenderer::default(),
+        &repo_path(),
     );
 
     api::run_server(app).await
+}
+
+fn repo_path() -> String {
+    env::var("GIT_REPO_PATH").expect("GIT_REPO_PATH not set")
 }

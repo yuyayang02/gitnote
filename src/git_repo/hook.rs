@@ -21,10 +21,6 @@ pub struct GitPushPayload {
     pub before: String,
     /// 更新后的 commit ID
     pub after: String,
-    /// 执行 push 的用户名或邮箱
-    pub pusher: String,
-    /// 仓库名称（不带 .git）
-    pub repository: String,
 }
 
 impl GitPushPayload {
@@ -56,8 +52,6 @@ mod tests {
             refname: "refs/heads/main".to_string(),
             before: "0000000000000000000000000000000000000000".to_string(),
             after: "abc123".to_string(),
-            pusher: "alice".to_string(),
-            repository: "repo1".to_string(),
         };
         assert!(matches!(args.push_kind(), PushKind::Sync));
     }
@@ -68,8 +62,6 @@ mod tests {
             refname: "refs/tags/cmd/rebuild".to_string(),
             before: "0000000000000000000000000000000000000000".to_string(),
             after: "abc123".to_string(),
-            pusher: "bob".to_string(),
-            repository: "repo2".to_string(),
         };
         assert!(matches!(args.push_kind(), PushKind::Rebuild));
     }
@@ -80,8 +72,6 @@ mod tests {
             refname: "refs/heads/feature".to_string(),
             before: "abc123".to_string(),
             after: "def456".to_string(),
-            pusher: "carol".to_string(),
-            repository: "repo3".to_string(),
         };
         assert!(matches!(args.push_kind(), PushKind::Ignore));
     }
@@ -92,8 +82,6 @@ mod tests {
             refname: "refs/tags/cmd/rebuild".to_string(),
             before: "abc123".to_string(),
             after: "def456".to_string(),
-            pusher: "dave".to_string(),
-            repository: "repo4".to_string(),
         };
         assert!(matches!(args.push_kind(), PushKind::Ignore));
     }

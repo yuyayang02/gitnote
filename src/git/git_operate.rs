@@ -4,15 +4,12 @@ use git2::{Oid, Repository, Sort};
 
 use crate::git::IntoRepoEntry;
 
-use super::{GitCommand, GitError, RepoEntry, RepoEntryPrune};
+use super::{GitError, RepoEntry, RepoEntryPrune};
 /// 提供对 Git 仓库的常用操作。
 ///
 /// 实现 [`GitOps`] 可以方便地执行 commit 差异分析、远程更新和文件读取等操作。
 pub trait GitOps: Send {
     const EMPTY_TREE_OID: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-    /// 更新远程仓库。
-    fn remote_update(&self) -> Result<(), GitError>;
-
     /// 按提交顺序遍历两个提交之间的差异，返回对应的 [`RepoEntry`] 列表。
     ///
     /// 如果指定了 `old`，则计算从该 commit 到 `new` 的差异；否则返回从仓库初始提交到 `new` 的差异。
@@ -71,12 +68,6 @@ impl GitOps for Repository {
         Ok(entries.prune())
     }
 
-    /// 更新远程仓库。
-    fn remote_update(&self) -> Result<(), GitError> {
-        GitCommand::remote_update(self.path())?;
-        Ok(())
-    }
-
     /// 读取 blob 内容为 UTF-8 字符串，解析失败返回 [`None`]。
     fn read_blob(&self, oid: &str) -> Option<String> {
         let blob = self.find_blob(Oid::from_str(oid).ok()?).ok()?;
@@ -105,10 +96,6 @@ impl AsyncRepository {
 impl GitOps for AsyncRepository {
     fn read_blob(&self, oid: &str) -> Option<String> {
         self.inner.lock().unwrap().read_blob(oid)
-    }
-
-    fn remote_update(&self) -> Result<(), GitError> {
-        self.inner.lock().unwrap().remote_update()
     }
 
     fn diff_commits_range(&self, old: &str, new: &str) -> Result<Vec<RepoEntry>, GitError> {
