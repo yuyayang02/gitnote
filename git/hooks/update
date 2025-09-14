@@ -1,0 +1,48 @@
+#!/bin/sh
+# update hook for single repo (simplified)
+
+# 参数
+REFNAME="$1"
+OLDREV="$2"
+NEWREV="$3"
+
+# 设置 API 地址
+# UPDATE_API=$(git config hooks.updateapi)
+# if [ -z "$UPDATE_API" ]; then
+#     echo "❌ Error: 'hooks.updateapi' is not set in Git config." >&2
+#     exit 1
+# fi
+
+UPDATE_API=http://127.0.0.1:3000/api/repo/update
+
+
+# 构建 JSON（只包含 refname, before, after）
+JSON_PAYLOAD=$(cat <<EOF
+{
+  "refname": "$REFNAME",
+  "before": "$OLDREV",
+  "after": "$NEWREV"
+}
+EOF
+)
+
+# 发送 POST 请求
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$UPDATE_API" \
+    -H "Content-Type: application/json" \
+    -d "$JSON_PAYLOAD")
+
+BODY=$(echo "$RESPONSE" | sed '$d')
+STATUS=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$STATUS" -eq 201 ]; then
+    echo "✅ Push successful: $REFNAME"
+elif [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+    echo "✅ Push accepted (status $STATUS): $REFNAME"
+    echo "$BODY"
+else
+    echo "❌ Push rejected: $REFNAME"
+    echo "$STATUS | $BODY" >&2
+    exit 1
+fi
+
+exit 0

@@ -39,7 +39,7 @@ async fn update(State(app): State<App>, Json(data): Json<GitPushPayload>) -> Res
     let ref_kind = data.push_kind();
     match ref_kind {
         PushKind::Sync => {
-            let repo = GitRepository::open(&data.repository)?.fetch()?;
+            let repo = GitRepository::open(app.repo_path())?;
             let entries = repo.diff_commits(&data.before, &data.after)?;
             entries
                 .persist(app, &repo, PersistMode::Incremental)
@@ -48,7 +48,7 @@ async fn update(State(app): State<App>, Json(data): Json<GitPushPayload>) -> Res
         }
 
         PushKind::Rebuild => {
-            let repo = GitRepository::open(&data.repository)?.fetch()?;
+            let repo = GitRepository::open(&app.repo_path())?;
             let entries = repo.snapshot(&data.after)?;
 
             entries.persist(app, &repo, PersistMode::ResetAll).await?;

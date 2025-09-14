@@ -23,12 +23,6 @@ impl GitRepository<AsyncRepository> {
 }
 
 impl<R: GitOps> GitRepository<R> {
-    /// 更新远程仓库，并返回自身以支持链式调用。
-    pub fn fetch(self) -> Result<Self, GitError> {
-        self.0.remote_update()?;
-        Ok(self)
-    }
-
     /// 获取内部仓库实例。
     fn repo(&self) -> &R {
         &self.0
