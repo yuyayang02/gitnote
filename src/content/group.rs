@@ -18,10 +18,10 @@ impl Group {
     /// 基于名称路径和 GitNote 内容创建新的 [`Group`]。
     ///
     /// 路径仅取父级目录作为分组名称，子级路径会被忽略。
-    /// `gitnote_content` 会解析为 [`GroupMeta`]。
+    /// `group_content` 会解析为 [`GroupMeta`]。
     ///
-    pub fn new(name: impl AsRef<Path>, gitnote_content: String) -> Result<Self> {
-        let meta = toml::from_str(&gitnote_content)?;
+    pub fn new(name: impl AsRef<Path>, group_content: String) -> Result<Self> {
+        let meta = toml::from_str(&group_content)?;
 
         Ok(Self {
             name: Self::extract_group_name(name.as_ref()),

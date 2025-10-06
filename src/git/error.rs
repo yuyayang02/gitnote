@@ -4,7 +4,6 @@
 ///
 /// - [`GitError::NotFound`]：请求的 blob 或文件不存在  
 /// - [`GitError::NotExist`]：仓库不存在  
-/// - [`GitError::InvalidConfig`]：仓库配置解析失败  
 /// - [`GitError::Git2`]：底层 [`git2::Error`] 错误  
 /// - [`GitError::IO`]：底层 IO 错误  
 /// - [`GitError::CommandFailed`]：外部命令执行失败，包含错误信息

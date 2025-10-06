@@ -6,7 +6,7 @@ use crate::content::{Article, ArticleBuilder, Group, NoContent};
 ///
 /// 支持增删改查，包括文章的 [`ArticleBuilder`]、[`Article`] 和组的 [`Group`]。
 pub trait ArticleStorage {
-    /// 获取 SQL 执行器，用于 [`sqlx::query`] 执行
+    /// 获取 SQL 执行器，用于 [`sqlx::query()`] 执行
     fn executor<'t>(&'t mut self) -> impl PgExecutor<'t>;
 
     /// 清空所有文章和组

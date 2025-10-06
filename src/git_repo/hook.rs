@@ -26,7 +26,7 @@ pub struct GitPushPayload {
 impl GitPushPayload {
     const ZERO_OID: &str = "0000000000000000000000000000000000000000";
 
-    /// 根据 [`refname`] 和 [`before`] 推断对应的 [`PushKind`]。
+    /// 根据 `refname` 和 `before` 推断对应的 [`PushKind`]。
     ///
     /// 规则：
     /// - `"refs/heads/main"` → [`PushKind::Sync`]
