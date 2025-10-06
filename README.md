@@ -1,87 +1,63 @@
-# 📘 GitNote 内容管理机制说明
+# GitNote
 
 本项目提供一个以 Git 仓库为核心的自托管内容管理系统，通过对 Git 仓库结构与提交历史的抽象，实现文章、分组、配置等语义建模与内容追踪。
 
 ---
 
-## 🛠️ 架构变更说明（2025-07-14）
 
-GitNote 项目将 Git Server 功能拆分为独立项目：
+## 内容编辑规范
 
-- 原本内嵌于 Rust API 的 Git Server（基于 SSH 和裸仓库）已 **完全迁移** 到独立的仓库：[GitNote Git Server](https://github.com/yuyayang02/gitnote-git-server)。
-- Rust API 不再负责容器内初始化 git 仓库、用户、公钥配置等逻辑，相关任务交由 Git Server 独立容器完成。
-- 两者之间通过挂载共享卷（或 API 通信）协同工作。
-- 原有仓库中的 `docker-compose.yml`、`sshd` 目录、`update` hook 等已删除。
+使用自定义的格式规范，可扩展，可自定义。详见[content-structure.md](./docs/content-structure.md)
 
-🎯 **拆分目标**：解耦职责、便于维护、增强容器可组合性。
+## Git 仓库
 
----
+GitNote 使用 Git 仓库作为内容源。通过环境变量 `GIT_REPO_PATH` 指定仓库路径，所有文章和分组配置都存储在其中。
 
-## 📁 内容结构约定
+当用户推送内容时，Git Hook 会触发同步，将变更信息发送到系统。系统根据分支或标签类型决定是增量同步还是全量重建，然后解析变更文件并更新数据库或存储。
 
-```text
-<repo-root>/
-├── <category>/            # 一个组
-│   ├── .gitnote.toml      # 组配置（可选）
-│   ├── first-post.md      # 文章文件
-│   └── another.md
-├── notes/                 # 另一个组
-│   └── ...                    
+特点：
+- 仓库即内容模型，所有操作由 Git 提交驱动  
+- 支持增量同步和全量重建
+- 解析文件后可直接生成系统行为和 HTML 内容
+
+
+## 部署
+
+GitNote 提供基于 Docker 的一键运行环境，内置 Git 服务与内容同步机制。
+
+### 构建镜像
+
+在项目根目录执行：
+
+```bash
+docker build -t gitnote:v1 .
 ```
 
----
+### 使用 docker-compose 启动
 
-## 🧠 内容单元：组 与 文章
+示例配置：
 
-### ✅ 组（Group）
-
-- 对应目录
-- 可选 `.gitnote.toml` 用于配置该目录下内容的分类、默认标签、可见性等
-
-示例 `.gitnote.toml`：
-
-```toml
-public = true
-
-[category]
-id = "notes"
-name = "笔记"
-
-[author]
-name = "xxx"
+```yaml
+gitnote:
+  image: gitnote:v1
+  container_name: gitnote-api
+  build:
+    context: "./gitnote"
+    dockerfile: "Dockerfile"
+  ports:
+    - "4000:3000"   # 应用接口
+    - "4022:22"     # SSH 访问端口
+  environment:
+    - GITNOTE_LOG=gitnote=info,tower_http=info # 日志级别控制
+    - DATABASE_URL=<db_url> # 数据库连接字符串
+    - GITHUB_MARKDOWN_RENDER_KEY=<your_github_token> # GitHub Markdown 渲染 token
+    - TZ=Asia/Shanghai # 容器时区设置
+  volumes:
+    - ssh_host_keys:/etc/ssh     # SSH 主机密钥，用于保存主机信息，防止重新构建导致的客户端信任失效
 ```
 
----
+容器启动后会自动：
 
-### ✅ 文章（File）
-
-- Markdown 文件（如 `xxx.md`）
-- 元信息写在 Front Matter（推荐使用 TOML 格式）
-
-示例 markdown文件
-
-```markdown
-+++
-title = "我的第一篇博客"
-summary = """
-介绍 GitNote 博客系统的设计。
-"""
-tags = ["rust", "git"]
-datetime = "2025-06-26"
-+++
-
-正文内容……
-```
-
-## 📂 Git 历史管理
-
-本项目在需要对主分支历史进行大规模调整（例如替换 main 分支历史为精简的存档分支历史）时，采用了规范的操作流程。
-
-具体操作步骤、注意事项、命令汇总详见： [docs/git-history-replace.md](docs/git-history-replace.md)
-
-> 该文档说明了如何使用 archived/2025-Q1 分支替换 main 分支中指定 tag 及其之前历史，同时保留后续提交，保证 Git 仓库历史的整洁与安全。
-
-
-## 🚧 Future Plans
-
-- 重构 `rebuild` 功能为后台异步任务，支持任务状态跟踪和异步触发。
+* 创建裸仓库 `/home/git/gitnote.git`
+* 初始化 SSH 服务并加载公钥
+* 安装并启用钩子脚本，实现内容同步
