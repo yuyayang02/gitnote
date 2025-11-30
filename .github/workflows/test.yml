@@ -1,0 +1,57 @@
+name: auto test on push main
+
+# 触发条件
+on:
+  push:
+    branches: ["main"]
+
+# 定义 Job
+jobs:
+  test:
+    runs-on: ubuntu-latest # 使用 GitHub 提供的 Ubuntu runner
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: runnerdb
+          POSTGRES_PASSWORD: runnerdb
+          POSTGRES_DB: runnerdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U runnerdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # 1. 拉取代码
+      - name: Checkout
+        uses: actions/checkout@v6.0.0
+
+      # 2. 安装 Rust
+      - name: rust-toolchain
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          toolchain: stable
+          override: true
+
+      # 3. 等待 postgresql 启动
+      - name: Wait for Postgres
+        run: |
+          until pg_isready -h localhost -p 5432 -U runnerdb; do
+            echo "Waiting for postgres..."
+            sleep 1
+          done
+
+      # 4. 运行测试
+      - name: Run tests
+        env:
+          DATABASE_URL: postgres://runnerdb:runnerdb@localhost:5432/runnerdb?options=-c search_path=gitnote
+          GITHUB_MARKDOWN_RENDER_KEY: ${{ secrets.MARKDOWN_RENDER_KEY }}
+          REPO_PATH: "tests/data/localtest.git"
+          GITNOTE_LOG: "gitnote=debug"
+        run: |
+          cargo test --verbose
+          cargo test --verbose -- --ignored

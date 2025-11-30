@@ -27,10 +27,10 @@ impl FileKind {
     ///
     pub(super) fn from_path(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name == ".group.toml" {
-                return FileKind::Group;
-            }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && name == ".group.toml"
+        {
+            return FileKind::Group;
         }
 
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -57,9 +57,9 @@ pub enum ChangeKind {
 
 /// 表示 Git 仓库中一次文件或目录的变更。
 ///
-/// `RepoEntry` 包含文件路径、变更类型、文件类型和提交时间等信息，
+/// [`GitFileEntry`] 包含文件路径、变更类型、文件类型和提交时间等信息，
 #[derive(Debug)]
-pub struct RepoEntry {
+pub struct GitFileEntry {
     pub(crate) id: String,
     pub(crate) path: PathBuf,
     pub(crate) change_kind: ChangeKind,
@@ -67,8 +67,8 @@ pub struct RepoEntry {
     pub(crate) timestamp: DateTime<Local>,
 }
 
-impl RepoEntry {
-    /// RepoEntry 的唯一 ID。
+impl GitFileEntry {
+    /// [`GitFileEntry`] 的唯一 ID。
     pub fn id(&self) -> &str {
         &self.id
     }
@@ -94,14 +94,14 @@ impl RepoEntry {
     }
 }
 
-/// Trait，用于将 Git `Diff` 和 `Commit` 转换为 [`RepoEntry`]。
-pub(super) trait IntoRepoEntry {
-    /// 将类型转换为 [`RepoEntry`] 列表。
-    fn into_entry(self) -> Vec<RepoEntry>;
+/// Trait，用于将 Git `Diff` 和 `Commit` 转换为 [`GitFileEntry`]。
+pub(super) trait IntoGitFileEntry {
+    /// 将类型转换为 [`GitFileEntry`] 列表。
+    fn into_entry(self) -> Vec<GitFileEntry>;
 }
 
-impl<'a> IntoRepoEntry for (Diff<'a>, Commit<'a>) {
-    fn into_entry(self) -> Vec<RepoEntry> {
+impl<'a> IntoGitFileEntry for (Diff<'a>, Commit<'a>) {
+    fn into_entry(self) -> Vec<GitFileEntry> {
         let (diff, commit) = self;
         let timestamp = Local.timestamp_opt(commit.time().seconds(), 0).unwrap();
 
@@ -116,7 +116,7 @@ impl<'a> IntoRepoEntry for (Diff<'a>, Commit<'a>) {
                 };
 
                 let path = file.path()?;
-                Some(RepoEntry {
+                Some(GitFileEntry {
                     id: file.id().to_string(),
                     path: path.to_path_buf(),
                     change_kind,
@@ -146,29 +146,29 @@ fn merge_change(old: Option<&ChangeKind>, new: ChangeKind) -> Option<ChangeKind>
     }
 }
 
-/// 定义对一组 [`RepoEntry`] 进行裁剪的行为。
+/// 定义对一组 [`GitFileEntry`] 进行裁剪的行为。
 ///
 /// 用于在序列中合并或抵消重复的文件变更，得到精简后的最终结果。
-pub trait RepoEntryPrune {
-    fn prune(self) -> Vec<RepoEntry>;
+pub trait GitFileEntryPrune {
+    fn prune(self) -> Vec<GitFileEntry>;
 }
 
-impl RepoEntryPrune for Vec<RepoEntry> {
+impl GitFileEntryPrune for Vec<GitFileEntry> {
     /// 对变更序列进行裁剪，合并同一路径的连续修改，去掉无效的抵消操作。
     ///
     /// 返回的结果只包含必要的文件变更，便于后续处理。
-    fn prune(self) -> Vec<RepoEntry> {
+    fn prune(self) -> Vec<GitFileEntry> {
         use std::collections::HashMap;
 
         let mut state: HashMap<std::path::PathBuf, usize> = HashMap::new();
-        let mut result: Vec<Option<RepoEntry>> = (0..self.len()).map(|_| None).collect();
+        let mut result: Vec<Option<GitFileEntry>> = (0..self.len()).map(|_| None).collect();
 
         for (idx, mut entry) in self.into_iter().enumerate() {
             let path = entry.path.clone();
             match merge_change(
                 state
                     .get(&path)
-                    .and_then(|&i| result[i].as_ref().map(|e: &RepoEntry| &e.change_kind)),
+                    .and_then(|&i| result[i].as_ref().map(|e: &GitFileEntry| &e.change_kind)),
                 entry.change_kind,
             ) {
                 Some(real_change) => {
@@ -190,8 +190,8 @@ impl RepoEntryPrune for Vec<RepoEntry> {
     }
 }
 
-impl fmt::Display for RepoEntry {
-    /// 格式化 [`RepoEntry`] 为字符串，用于 CLI 或日志输出。
+impl fmt::Display for GitFileEntry {
+    /// 格式化 [`GitFileEntry`] 为字符串，用于 CLI 或日志输出。
     ///
     /// 格式示例：
     /// ```text
@@ -233,7 +233,7 @@ pub trait AsSummary {
     fn as_summary(&self) -> String;
 }
 
-impl AsSummary for Vec<RepoEntry> {
+impl AsSummary for Vec<GitFileEntry> {
     fn as_summary(&self) -> String {
         if self.is_empty() {
             return "No entries".to_string();
@@ -242,7 +242,7 @@ impl AsSummary for Vec<RepoEntry> {
         // 按时间从老到新排序
         // self.sort_by_key(|e| e.timestamp);
         // 转换为多行字符串
-        self.into_iter()
+        self.iter()
             .map(|e| e.to_string())
             .collect::<Vec<_>>()
             .join("\n")
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_repo_entry_display() {
-        let entry_added = RepoEntry {
+        let entry_added = GitFileEntry {
             id: "123".to_string(),
             path: PathBuf::from("group-a/test.md"),
             change_kind: ChangeKind::Added,
@@ -299,7 +299,7 @@ mod tests {
             timestamp: Local.with_ymd_and_hms(2024, 8, 22, 12, 30, 0).unwrap(),
         };
 
-        let entry_modified = RepoEntry {
+        let entry_modified = GitFileEntry {
             id: "124".to_string(),
             path: PathBuf::from("group-a/updated.md"),
             change_kind: ChangeKind::Modified,

@@ -54,22 +54,22 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # 复制全部源代码（依赖变更后才会执行此层）
 COPY . .
 
+ENV REPO_PATH=/home/git/repo.git
 # 构建主应用（musl静态链接）
 RUN cargo build --release --target x86_64-unknown-linux-musl
 
 
 # ====== 第四阶段：运行环境 ======
-# 使用轻量Alpine运行时
-FROM alpine:latest AS runtime
+# 使用自定义git-ssh镜像运行时
+FROM gitnote-ssh:latest AS runtime
+
 WORKDIR /app
 
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
- && apk update 
+    && apk update
 
-# 安装必要软件
+# 安装应用依赖（如果有额外需求）
 RUN apk add --no-cache \
-    git \
-    openssh \
     tzdata \
     bash \
     curl \
@@ -77,36 +77,16 @@ RUN apk add --no-cache \
 
 # 设置时区
 RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
- && echo "Asia/Shanghai" > /etc/timezone
+    && echo "Asia/Shanghai" > /etc/timezone
 ENV TZ=Asia/Shanghai
 
-# ===== Git 服务初始化 =====
-ENV GIT_REPO_NAME=gitnote.git \
-    SSH_AUTHORIZED_KEYS_FILE=/srv/ssh/authorized_keys
-
-# 挂载 SSH host keys
-VOLUME [ "/etc/ssh" ]
-
-# 删除系统欢迎信息
-RUN rm -f /etc/motd
-
-# 复制 git hooks
-COPY git/hooks/ /srv/hooks/
-COPY git/authorized_keys ${SSH_AUTHORIZED_KEYS_FILE}
-
-# 复制 entrypoint 脚本
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# ===== 应用部分 =====
-# 从构建阶段复制二进制文件
+# 使用 Rust 多阶段构建的二进制文件
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/gitnote ./
 
+# 暴露端口（如果 Git SSH 已在基底镜像中暴露可选）
 EXPOSE 22
-
-# 设置 entrypoint
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+EXPOSE 3000
 
 # CMD 可以作为默认参数传入 Rust 程序
 # 例如默认启动 gitnote，用户也可以覆盖
-CMD ["./gitnote"]
+CMD ["sh", "-c", "/usr/sbin/sshd & exec /app/gitnote"]

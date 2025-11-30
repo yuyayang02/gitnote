@@ -71,7 +71,7 @@ impl content::Renderer for GithubAPiRenderer {
     /// 将 Markdown 文本渲染为 HTML
     ///
     async fn render<T: AsRef<str>>(&self, content: T) -> Result<String> {
-        const GITHUB_MARKDOWN_RENDER_API: &'static str = "https://api.github.com/markdown";
+        const GITHUB_MARKDOWN_RENDER_API: &str = "https://api.github.com/markdown";
 
         let resp = self
             .client
@@ -94,7 +94,7 @@ mod tests {
 
     /// 访问 GitHub API 的测试，需要网络和有效 token
     #[tokio::test]
-    #[ignore = "需要访问 github api"]
+    #[ignore = "访问 GitHub API 的测试 依赖网络和有效 Github token"]
     async fn test_render() {
         let render = GithubAPiRenderer::default();
         println!("{:?}", render.render("content").await);

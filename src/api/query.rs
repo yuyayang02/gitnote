@@ -4,7 +4,9 @@ use axum::{Json, Router};
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
 
-use super::{App, ArticleQuery, Error, Result};
+use super::{Error, Querier, Result};
+
+use crate::{state::AppState, storage::DBPool};
 
 /// 配置文章相关路由。
 ///
@@ -13,12 +15,12 @@ use super::{App, ArticleQuery, Error, Result};
 /// - `GET /articles/{slug}`：获取单篇文章
 /// - `GET /articles/tags`：获取所有标签
 /// - `GET /articles/categories`：获取所有分类
-pub fn setup_route() -> Router<App> {
+pub fn setup_route() -> Router<AppState> {
     Router::new()
         .route("/articles", get(articles_list))
-        .route("/articles/{slug}", get(articles_get_one))
-        .route("/articles/tags", get(articles_tags))
-        .route("/articles/categories", get(articels_categories))
+        .route("/articles/{slug}", get(article))
+        .route("/tags", get(tag_list))
+        .route("/groups", get(group_list))
 }
 
 /// 文章元信息，用于列表展示。
@@ -28,15 +30,14 @@ pub struct ArticleMeta {
     pub title: String,
     pub summary: String,
     pub tags: Vec<String>,
-    pub category: Option<Category>,
-    pub author: Option<Author>,
+    pub group: Group,
     pub updated_at: i64,
     pub created_at: i64,
 }
 
 /// 完整文章，包括元信息和正文。
 #[derive(Debug, Serialize)]
-pub struct ArticleFull {
+pub struct ArticleDetail {
     #[serde(flatten)]
     meta: ArticleMeta,
 
@@ -45,39 +46,34 @@ pub struct ArticleFull {
 
 /// 文章分类。
 #[derive(Debug, Serialize)]
-pub struct Category {
+pub struct Group {
     id: String,
     name: String,
-}
-
-/// 文章作者。
-#[derive(Debug, Serialize)]
-pub struct Author {
-    name: String,
+    kind: serde_json::Value,
 }
 
 /// 根据 slug 获取单篇文章。
 ///
 /// 返回 [`ArticleFull`]，如果文章不存在返回 [`Error::NotFound`]。
-async fn articles_get_one(
+async fn article(
     Path(slug): Path<String>,
-    State(app): State<App>,
-) -> Result<Json<ArticleFull>> {
-    let article = app.db().get_one(&slug).await?.ok_or(Error::NotFound)?;
+    State(pool): State<DBPool>,
+) -> Result<Json<ArticleDetail>> {
+    let article = pool.get_one(&slug).await?.ok_or(Error::NotFound)?;
 
-    Ok(Json(ArticleFull {
+    Ok(Json(ArticleDetail {
         meta: ArticleMeta {
             slug: article.slug,
             title: article.title,
             summary: article.summary,
             tags: article.tags,
-            category: article.category.map(|c| Category {
-                id: c.0.id,
-                name: c.0.name,
-            }),
-            author: article.author_name.map(|name| Author { name }),
             updated_at: article.updated_at.timestamp_millis(),
             created_at: article.created_at.timestamp_millis(),
+            group: Group {
+                id: article.group.0.id,
+                name: article.group.0.name,
+                kind: article.group.0.kind.0,
+            },
         },
         content: article.content,
     }))
@@ -86,29 +82,26 @@ async fn articles_get_one(
 /// 获取所有文章标签。
 ///
 /// 返回标签列表。
-async fn articles_tags(State(app): State<App>) -> Result<Json<Vec<String>>> {
-    app.db().tags().await.map(Json).map_err(Into::into)
+async fn tag_list(State(pool): State<DBPool>) -> Result<Json<Vec<String>>> {
+    pool.tags().await.map(Json).map_err(Into::into)
 }
 
 /// 获取所有文章分类。
 ///
 /// 返回 [`Category`] 列表。
-async fn articels_categories(State(app): State<App>) -> Result<Json<Vec<Category>>> {
-    app.db()
-        .categories()
-        .await
-        .map(|c_vec| {
-            Json(
-                c_vec
-                    .into_iter()
-                    .map(|c| Category {
-                        id: c.id,
-                        name: c.name,
-                    })
-                    .collect(),
-            )
-        })
-        .map_err(Into::into)
+async fn group_list(State(pool): State<DBPool>) -> Result<Json<Vec<Group>>> {
+    match pool.groups().await {
+        Ok(data) => Ok(Json(
+            data.into_iter()
+                .map(|d| Group {
+                    id: d.id,
+                    name: d.name,
+                    kind: d.kind.0,
+                })
+                .collect::<Vec<_>>(),
+        )),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// 查询参数，用于文章列表分页和筛选。
@@ -117,9 +110,8 @@ async fn articels_categories(State(app): State<App>) -> Result<Json<Vec<Category
 pub struct QueryParams {
     limit: i32,
     page: i32,
-    author: Option<String>,
-    category: Option<String>,
-    tags: Vec<String>, // 支持 tags=rust&tags=test
+    group: Option<String>,
+    tags: String,
 }
 
 impl Default for QueryParams {
@@ -127,9 +119,8 @@ impl Default for QueryParams {
         Self {
             limit: 13,
             page: 1,
-            author: None,
-            category: None,
-            tags: Vec::default(),
+            group: None,
+            tags: Default::default(),
         }
     }
 }
@@ -140,34 +131,40 @@ impl Default for QueryParams {
 /// 返回 [`ArticleMeta`] 列表。
 async fn articles_list(
     Query(params): Query<QueryParams>,
-    State(app): State<App>,
+    State(pool): State<DBPool>,
 ) -> Result<Json<Vec<ArticleMeta>>> {
-    Ok(Json(
-        app.db()
-            .list(
-                params.limit,
-                params.page,
-                params.category,
-                params.author,
-                params.tags,
-            )
-            .await
-            .map(|va| {
-                va.into_iter()
-                    .map(|a| ArticleMeta {
-                        slug: a.slug,
-                        title: a.title,
-                        summary: a.summary,
-                        tags: a.tags,
-                        category: a.category.map(|c| Category {
-                            id: c.0.id,
-                            name: c.0.name,
-                        }),
-                        author: a.author_name.map(|name| Author { name }),
-                        updated_at: a.updated_at.timestamp_millis(),
-                        created_at: a.created_at.timestamp_millis(),
-                    })
-                    .collect()
-            })?,
-    ))
+    match pool
+        .article_list(
+            params.page,
+            params.limit,
+            params.group.as_deref(),
+            params
+                .tags
+                .split(",")
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .collect::<Vec<_>>(),
+        )
+        .await
+    {
+        Ok(data) => Ok(Json(
+            data.into_iter()
+                .map(|a| ArticleMeta {
+                    slug: a.slug,
+                    title: a.title,
+
+                    summary: a.summary,
+                    tags: a.tags,
+                    updated_at: a.updated_at.timestamp_millis(),
+                    created_at: a.created_at.timestamp_millis(),
+                    group: Group {
+                        id: a.group.0.id,
+                        name: a.group.0.name,
+                        kind: a.group.0.kind.0,
+                    },
+                })
+                .collect(),
+        )),
+        Err(e) => Err(e.into()),
+    }
 }

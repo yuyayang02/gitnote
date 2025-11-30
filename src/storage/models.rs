@@ -15,44 +15,35 @@ pub struct ArticleDetail {
     pub summary: String,
     /// 标签列表
     pub tags: Vec<String>,
+    /// 文章内容
+    pub content: String,
+    /// 文章的分组
+    pub group: Json<Group>,
     /// 更新时间
     pub updated_at: DateTime<Local>,
     /// 创建时间
     pub created_at: DateTime<Local>,
-    /// 文章内容
-    pub content: String,
-
-    /// 可选分类信息，参见 [`CategoryInfo`]
-    pub category: Option<Json<CategoryInfo>>,
-    /// 可选作者名称
-    pub author_name: Option<String>,
 }
 
 /// 文章列表项
 ///
 /// 包含文章基础信息，用于列表展示，不包含完整内容。
 #[derive(Debug, sqlx::FromRow)]
-pub struct ArticleListItem {
+pub struct ArticleSummary {
     pub slug: String,
     pub title: String,
     pub summary: String,
     pub tags: Vec<String>,
+    pub group: Json<Group>,
     pub updated_at: DateTime<Local>,
     pub created_at: DateTime<Local>,
-
-    /// 可选分类信息，参见 [`CategoryInfo`]
-    pub category: Option<Json<CategoryInfo>>,
-    /// 可选作者名称
-    pub author_name: Option<String>,
 }
 
-/// 分类信息
-///
-/// 包含分类 ID 和名称。
+/// 组信息
 #[derive(Debug, sqlx::FromRow, Deserialize)]
-pub struct CategoryInfo {
-    /// 分类 ID
+pub struct Group {
     pub id: String,
-    /// 分类名称
     pub name: String,
+    pub public: bool,
+    pub kind: Json<serde_json::Value>,
 }

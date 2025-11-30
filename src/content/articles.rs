@@ -22,16 +22,22 @@ pub struct Article {
     pub rendered_content: String,
 }
 
+#[derive(Debug)]
+pub struct ArticleRef<'a> {
+    pub slug: &'a str,
+    pub group: &'a str,
+}
+
 pub struct NoContent;
 pub struct Content(String);
 
-pub struct ArticleBuilder<C> {
+pub struct ArticleBuilder<T> {
     group: String,
     slug: String,
-    content: C,
+    content: T,
 }
 
-pub trait Renderer {
+pub trait Renderer: Send + Sync {
     fn render<T: AsRef<str>>(
         &self,
         content: T,
@@ -41,11 +47,10 @@ pub trait Renderer {
 impl ArticleBuilder<NoContent> {
     pub fn new(path: impl AsRef<Path>) -> Self {
         // 去除文件扩展名
-        // let name: String = slug.into();
         let path = path.as_ref();
         let group = path
             .parent()
-            .map(|p| p.to_string_lossy().into_owned())
+            .map(|p| p.to_string_lossy().trim_matches('/').to_string())
             .unwrap_or_default();
 
         let slug = path
@@ -57,6 +62,13 @@ impl ArticleBuilder<NoContent> {
             group,
             slug,
             content: NoContent,
+        }
+    }
+
+    pub fn to_ref<'a>(&'a self) -> ArticleRef<'a> {
+        ArticleRef {
+            slug: &self.slug,
+            group: &self.group,
         }
     }
 
@@ -81,7 +93,7 @@ impl<T> ArticleBuilder<T> {
 
 impl ArticleBuilder<Content> {
     fn parse_content(&self) -> Result<(FrontMatter, String)> {
-        const DELIM: &'static str = "+++";
+        const DELIM: &str = "+++";
 
         let content = self.content.0.trim_start(); // 忽略开头空白
 
@@ -130,20 +142,20 @@ where
 
     for fmt in &["%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"] {
         if let Ok(naive_dt) = NaiveDateTime::parse_from_str(&s, fmt) {
-            return Ok(Local
+            return Local
                 .from_local_datetime(&naive_dt)
                 .single()
-                .ok_or_else(|| serde::de::Error::custom("本地时间不明确"))?);
+                .ok_or_else(|| serde::de::Error::custom("本地时间不明确"));
         }
     }
 
     for fmt in &["%Y-%m-%d", "%Y/%m/%d"] {
         if let Ok(date) = NaiveDate::parse_from_str(&s, fmt) {
             if let Some(naive_dt) = date.and_hms_opt(0, 0, 0) {
-                return Ok(Local
+                return Local
                     .from_local_datetime(&naive_dt)
                     .single()
-                    .ok_or_else(|| serde::de::Error::custom("本地时间不明确"))?);
+                    .ok_or_else(|| serde::de::Error::custom("本地时间不明确"));
             } else {
                 return Err(serde::de::Error::custom("无法构建时间"));
             }

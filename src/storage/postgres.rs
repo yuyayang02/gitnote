@@ -3,13 +3,11 @@ use std::{env, str, time::Duration};
 use sqlx::postgres::PgPoolOptions;
 
 /// 数据库连接池类型
-pub type Db = sqlx::PgPool;
+pub type DBPool = sqlx::PgPool;
 
 /// 从环境变量 `DATABASE_URL` 初始化数据库连接池
-pub async fn init_db_from_env() -> Db {
-    let conn_url = env::var("DATABASE_URL")
-        .ok()
-        .expect("环境变量: `DATABASE_URL`: NotPresent");
+pub async fn init_db_from_env() -> DBPool {
+    let conn_url = env::var("DATABASE_URL").expect("`DATABASE_URL` env not set");
     new_db_poll(&conn_url).await.unwrap()
 }
 
@@ -23,7 +21,7 @@ pub async fn init_db_from_env() -> Db {
 /// - 获取连接超时 2 秒
 /// - 获取前测试连接
 /// - 最小连接数 2
-async fn new_db_poll(conn_url: &str) -> Result<Db, sqlx::Error> {
+pub async fn new_db_poll(conn_url: &str) -> Result<DBPool, sqlx::Error> {
     PgPoolOptions::new()
         .idle_timeout(Duration::from_secs(60))
         .max_lifetime(Duration::from_secs(1500))
@@ -39,9 +37,8 @@ async fn new_db_poll(conn_url: &str) -> Result<Db, sqlx::Error> {
 ///
 /// 将文件内容按 `;` 分割，每条 SQL 单独执行
 #[allow(unused)]
-pub async fn migrate(db: &Db, file: &str) -> Result<(), sqlx::Error> {
+pub async fn migrate(db: &DBPool, file: &str) -> Result<(), sqlx::Error> {
     let content = std::fs::read_to_string(file)?;
-
     let sqls: Vec<&str> = content.split(";").collect();
     for sql in sqls {
         if sql.is_empty() {

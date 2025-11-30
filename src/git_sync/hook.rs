@@ -15,7 +15,7 @@ pub enum PushKind {
 /// 包含触发更新的 ref、变更前后的 commit、操作用户以及仓库信息。
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct GitPushPayload {
-    /// 触发更新的 ref 名称，如 `refs/heads/main`
+    /// 触发更新的 ref 名称
     pub refname: String,
     /// 更新前的 commit ID
     pub before: String,
@@ -24,7 +24,7 @@ pub struct GitPushPayload {
 }
 
 impl GitPushPayload {
-    const ZERO_OID: &str = "0000000000000000000000000000000000000000";
+    const ZERO_COMMIT_OID: &str = "0000000000000000000000000000000000000000";
 
     /// 根据 `refname` 和 `before` 推断对应的 [`PushKind`]。
     ///
@@ -36,7 +36,7 @@ impl GitPushPayload {
     pub fn push_kind(&self) -> PushKind {
         match self.refname.as_ref() {
             "refs/heads/main" => PushKind::Sync,
-            "refs/tags/cmd/rebuild" if &self.before == Self::ZERO_OID => PushKind::Rebuild,
+            "refs/tags/cmd/rebuild" if self.before == Self::ZERO_COMMIT_OID => PushKind::Rebuild,
             _ => PushKind::Ignore,
         }
     }

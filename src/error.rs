@@ -3,7 +3,7 @@ use std::io;
 use axum::response::{IntoResponse, Response};
 use reqwest::StatusCode;
 
-use crate::git;
+use crate::git_client;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -19,7 +19,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
-    Git(#[from] git::GitError),
+    Git(#[from] git_client::GitError),
 
     /// TOML 解析错误
     #[error(transparent)]
@@ -61,14 +61,14 @@ impl IntoResponse for Error {
             Error::Git(e) => {
                 tracing::error!(%e, "git repo error");
                 match e {
-                    git::GitError::NotFound | git::GitError::NotExist => {
+                    git_client::GitError::NotFound | git_client::GitError::NotExist => {
                         (StatusCode::NOT_FOUND, e.to_string())
                     }
-                    git::GitError::Git2(e) => {
+                    git_client::GitError::Git2(e) => {
                         (StatusCode::INTERNAL_SERVER_ERROR, e.message().to_string())
                     }
-                    git::GitError::IO(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-                    git::GitError::CommandFailed(s) => (StatusCode::INTERNAL_SERVER_ERROR, s),
+                    git_client::GitError::IO(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+                    git_client::GitError::CommandFailed(s) => (StatusCode::INTERNAL_SERVER_ERROR, s),
                 }
                 .into_response()
             }

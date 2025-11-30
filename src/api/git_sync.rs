@@ -7,16 +7,19 @@ use axum::{
 use reqwest::StatusCode;
 
 use crate::{
-    git::{AsSummary, GitRepository},
-    git_repo::GitPushPayload,
+    git_client::{AsSummary, GitClient},
+    git_sync::GitPushPayload,
+    state::AppState,
 };
 
-use super::{App, PersistMode, PushKind, RepoEntryPersist, Result};
+use super::{PersistMode, Persistable, PushKind, Result};
+
+// type AppState =
 
 /// 配置 Git 仓库更新相关的路由。
 ///
 /// 将 `/repo/update` 注册为 POST 请求，用于处理 Git push 事件。
-pub fn setup_route() -> Router<App> {
+pub fn setup_route() -> Router<AppState> {
     Router::new().route("/repo/update", post(update))
 }
 
@@ -31,27 +34,34 @@ pub fn setup_route() -> Router<App> {
 /// 执行流程：
 /// 1. 打开并 fetch 仓库
 /// 2. 根据 push 类型选择增量或全量处理
-/// 3. 调用 [`RepoEntryPersist::persist`] 将数据写入应用
+/// 3. 调用 [`GitFileEntryPersist::persist`] 将数据写入应用
 /// 4. 返回 HTTP 响应
-async fn update(State(app): State<App>, Json(data): Json<GitPushPayload>) -> Result<Response> {
+async fn update(State(app): State<AppState>, Json(data): Json<GitPushPayload>) -> Result<Response> {
     tracing::debug!(data = ?data, "git push paylaod");
 
     let ref_kind = data.push_kind();
     match ref_kind {
         PushKind::Sync => {
-            let repo = GitRepository::open(app.repo_path())?;
+            let repo = GitClient::open(app.repo_path())?;
             let entries = repo.diff_commits(&data.before, &data.after)?;
             entries
-                .persist(app, &repo, PersistMode::Incremental)
+                .persist(
+                    app.storage(),
+                    app.renderer(),
+                    &repo,
+                    PersistMode::Incremental,
+                )
                 .await?;
             Ok((StatusCode::OK, entries.as_summary()).into_response())
         }
 
         PushKind::Rebuild => {
-            let repo = GitRepository::open(&app.repo_path())?;
+            let repo = GitClient::open(app.repo_path())?;
             let entries = repo.snapshot(&data.after)?;
 
-            entries.persist(app, &repo, PersistMode::ResetAll).await?;
+            entries
+                .persist(app.storage(), app.renderer(), &repo, PersistMode::ResetAll)
+                .await?;
             Ok((StatusCode::OK, entries.as_summary()).into_response())
         }
         _ => Ok(StatusCode::CREATED.into_response()),

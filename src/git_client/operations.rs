@@ -2,32 +2,32 @@ use std::sync::{Arc, Mutex};
 
 use git2::{Oid, Repository, Sort};
 
-use crate::git::IntoRepoEntry;
+use crate::git_client::IntoGitFileEntry;
 
-use super::{GitError, RepoEntry, RepoEntryPrune};
+use super::{GitError, GitFileEntry, GitFileEntryPrune};
 /// 提供对 Git 仓库的常用操作。
 ///
-/// 实现 [`GitOps`] 可以方便地执行 commit 差异分析、远程更新和文件读取等操作。
-pub trait GitOps: Send {
+/// 实现 [`GitOperation`] 可以方便地执行 commit 差异分析、远程更新和文件读取等操作。
+pub trait GitOperation: Send {
     const EMPTY_TREE_OID: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-    /// 按提交顺序遍历两个提交之间的差异，返回对应的 [`RepoEntry`] 列表。
+    /// 按提交顺序遍历两个提交之间的差异，返回对应的 [`GitFileEntry`] 列表。
     ///
     /// 如果指定了 `old`，则计算从该 commit 到 `new` 的差异；否则返回从仓库初始提交到 `new` 的差异。
-    fn diff_commits_range(&self, old: &str, new: &str) -> Result<Vec<RepoEntry>, GitError>;
+    fn diff_commits_range(&self, old: &str, new: &str) -> Result<Vec<GitFileEntry>, GitError>;
 
     /// 读取指定 blob 内容为 UTF-8 字符串，解析失败返回 [`None`]。
     fn read_blob(&self, blob_id: &str) -> Option<String>;
 }
 
-impl GitOps for Repository {
-    /// 按提交顺序遍历两个 commit 之间的差异，并生成 [`RepoEntry`] 列表。
+impl GitOperation for Repository {
+    /// 按提交顺序遍历两个 commit 之间的差异，并生成 [`GitFileEntry`] 列表。
     ///
     /// 流程：
     /// 1. 解析 commit ID 为 Oid
     /// 2. 创建 revwalk，按拓扑顺序从新 commit 向旧 commit 遍历
     /// 3. 对每个 commit 生成相对于前一个 tree 的差异
-    /// 4. 将差异转换为 [`RepoEntry`] 列表返回
-    fn diff_commits_range(&self, old: &str, new: &str) -> Result<Vec<RepoEntry>, GitError> {
+    /// 4. 将差异转换为 [`GitFileEntry`] 列表返回
+    fn diff_commits_range(&self, old: &str, new: &str) -> Result<Vec<GitFileEntry>, GitError> {
         let old_oid = Oid::from_str(old)?;
         let new_oid = Oid::from_str(new)?;
 
@@ -62,7 +62,7 @@ impl GitOps for Repository {
                 *prev_tree = Some(tree);
                 Some((diff, commit))
             })
-            .flat_map(IntoRepoEntry::into_entry)
+            .flat_map(IntoGitFileEntry::into_entry)
             .collect::<Vec<_>>();
 
         Ok(entries.prune())
@@ -80,11 +80,11 @@ impl GitOps for Repository {
 /// 异步访问的仓库封装。
 ///
 /// 内部使用 `Arc<Mutex<Repository>>` 保证线程安全。
-pub struct AsyncRepository {
+pub struct AsyncGitClient {
     inner: Arc<Mutex<Repository>>,
 }
 
-impl AsyncRepository {
+impl AsyncGitClient {
     /// 构造新的异步仓库封装。
     pub(super) fn new(repo: Repository) -> Self {
         Self {
@@ -93,12 +93,12 @@ impl AsyncRepository {
     }
 }
 
-impl GitOps for AsyncRepository {
+impl GitOperation for AsyncGitClient {
     fn read_blob(&self, oid: &str) -> Option<String> {
         self.inner.lock().unwrap().read_blob(oid)
     }
 
-    fn diff_commits_range(&self, old: &str, new: &str) -> Result<Vec<RepoEntry>, GitError> {
+    fn diff_commits_range(&self, old: &str, new: &str) -> Result<Vec<GitFileEntry>, GitError> {
         self.inner.lock().unwrap().diff_commits_range(old, new)
     }
 }

@@ -1,8 +1,7 @@
 use crate::{
-    app::App,
-    content::{ArticleBuilder, Group},
-    git::{ChangeKind, FileKind, GitRepository, RepoEntry},
-    storage::ArticleStorage,
+    content::{ArticleBuilder, Group, Renderer},
+    git_client::{ChangeKind, FileKind, GitClient, GitFileEntry},
+    storage::Store,
 };
 /// 持久化模式
 ///
@@ -15,24 +14,29 @@ pub enum PersistMode {
 
 /// 定义可持久化的条目接口
 ///
-/// 提供一个 [`RepoEntryPersist::persist`] 方法，将条目持久化到数据库或存储中
-pub trait RepoEntryPersist {
+/// 提供一个 [`GitFileEntryPersist::persist`] 方法，将条目持久化到数据库或存储中
+pub trait Persistable {
     type Error;
 
     /// 持久化条目
     ///
-    fn persist(
+    fn persist<R, S>(
         &self,
-        app: App,
-        repo: &GitRepository,
+        storage: S,
+        renderer: &R,
+        repo: &GitClient,
         mode: PersistMode,
-    ) -> impl std::future::Future<Output = Result<(), Self::Error>>;
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>>
+    where
+        R: Renderer,
+        S: Store,
+        S::Owned: Store;
 }
 
-impl RepoEntryPersist for Vec<RepoEntry> {
+impl Persistable for Vec<GitFileEntry> {
     type Error = crate::error::Error;
 
-    /// 将多个 [`RepoEntry`] 持久化到数据库
+    /// 将多个 [`GitFileEntry`] 持久化到数据库
     ///
     /// 根据 [`PersistMode`] 决定是重置全部还是增量更新。
     ///
@@ -45,16 +49,20 @@ impl RepoEntryPersist for Vec<RepoEntry> {
     ///     - Deleted：从数据库删除
     /// - Other 文件类型：忽略
     ///
-    async fn persist(
+    async fn persist<R, S>(
         &self,
-        app: App,
-        repo: &GitRepository,
+        mut storage: S,
+        renderer: &R,
+        repo: &GitClient,
         mode: PersistMode,
-    ) -> Result<(), Self::Error> {
-        let mut tx = app.db().begin().await?;
-
+    ) -> Result<(), Self::Error>
+    where
+        R: Renderer,
+        S: Store,
+        S::Owned: Store,
+    {
         if let PersistMode::ResetAll = mode {
-            tx.reset_all().await?;
+            storage.clean();
         };
 
         for entry in self {
@@ -62,33 +70,33 @@ impl RepoEntryPersist for Vec<RepoEntry> {
                 (FileKind::Group, ChangeKind::Added | ChangeKind::Modified) => {
                     let content = repo.load_file(entry.id())?;
                     let group = Group::new(entry.path(), content)?;
-                    tx.update_group(&group).await?;
+                    storage.upsert_group(&group);
                 }
 
                 (FileKind::Group, ChangeKind::Deleted) => {
                     let group = Group::empty(entry.path());
-                    tx.remove_group(&group).await?;
+                    storage.remove_group(&group);
                 }
 
                 (FileKind::Markdown, ChangeKind::Added | ChangeKind::Modified) => {
                     let content = repo.load_file(entry.id())?;
                     let article = ArticleBuilder::new(entry.path())
                         .content(content)
-                        .build_with_renderer(app.renderer())
+                        .build_with_renderer(renderer)
                         .await?;
-                    tx.upsert(&article).await?;
+                    storage.upsert_article(&article);
                 }
 
                 (FileKind::Markdown, ChangeKind::Deleted) => {
                     let article_builder = ArticleBuilder::new(entry.path());
-                    tx.remove(&article_builder).await?;
+                    storage.remove_article(article_builder.to_ref());
                 }
 
                 (FileKind::Other, _) => (),
             }
         }
 
-        tx.commit().await?;
+        storage.commit().await?;
         Ok(())
     }
 }
