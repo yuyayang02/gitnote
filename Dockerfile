@@ -1,12 +1,13 @@
 # ====== 第一阶段：构建环境准备 ======
 # 使用带musl工具链的Rust基础镜像
-FROM clux/muslrust:1.85.0-stable-2025-03-18 AS chef
+FROM clux/muslrust:1.91.1-stable AS chef
 
 # 设置工作目录
 WORKDIR /app
 
 # 配置Cargo国内镜像源加速下载
-RUN cat <<EOF > /root/.cargo/config.toml
+RUN mkdir -p /root/.cargo && \
+    cat <<EOF > /root/.cargo/config.toml
 [source.crates-io]
 replace-with = "rsproxy-sparse"  # 使用稀疏索引加速
 
