@@ -6,8 +6,7 @@ FROM clux/muslrust:1.91.1-stable AS chef
 WORKDIR /app
 
 # 配置Cargo国内镜像源加速下载
-RUN mkdir -p /root/.cargo 
-RUN cat <<EOF > /root/.cargo/config.toml
+RUN cat <<EOF > $CARGO_HOME/config.toml
 [source.crates-io]
 replace-with = "rsproxy-sparse"  # 使用稀疏索引加速
 
