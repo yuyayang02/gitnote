@@ -122,8 +122,10 @@ impl ArticleBuilder<Content> {
     pub async fn build_with_renderer<R: Renderer>(self, renderer: &R) -> Result<Article> {
         let (mut frontmatter, body) = self.parse_content()?;
 
-        let rendered_content = renderer.render(body).await?;
-        frontmatter.summary = renderer.render(&frontmatter.summary).await?;
+        let (rendered_content, rendered_summary) =
+            tokio::try_join!(renderer.render(body), renderer.render(&frontmatter.summary))?;
+
+        frontmatter.summary = rendered_summary;
 
         Ok(Article {
             group: self.group,

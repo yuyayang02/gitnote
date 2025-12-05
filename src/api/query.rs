@@ -49,7 +49,6 @@ pub struct ArticleDetail {
 pub struct Group {
     id: String,
     name: String,
-    kind: serde_json::Value,
 }
 
 /// 根据 slug 获取单篇文章。
@@ -72,7 +71,6 @@ async fn article(
             group: Group {
                 id: article.group.0.id,
                 name: article.group.0.name,
-                kind: article.group.0.kind.0,
             },
         },
         content: article.content,
@@ -96,7 +94,6 @@ async fn group_list(State(pool): State<DBPool>) -> Result<Json<Vec<Group>>> {
                 .map(|d| Group {
                     id: d.id,
                     name: d.name,
-                    kind: d.kind.0,
                 })
                 .collect::<Vec<_>>(),
         )),
@@ -160,7 +157,6 @@ async fn articles_list(
                     group: Group {
                         id: a.group.0.id,
                         name: a.group.0.name,
-                        kind: a.group.0.kind.0,
                     },
                 })
                 .collect(),
