@@ -1,6 +1,6 @@
 # ====== 第一阶段：构建环境准备 ======
 # 使用带musl工具链的Rust基础镜像
-FROM clux/muslrust:1.91.1-stable AS chef
+FROM rust:1.91.1 AS meta
 
 # 设置工作目录
 WORKDIR /app
@@ -14,28 +14,30 @@ replace-with = "rsproxy-sparse"  # 使用稀疏索引加速
 registry = "https://rsproxy.cn/crates.io-index"
 
 [source.rsproxy-sparse]
-registry = "sparse+https://rsproxy.cn/index/"  # 推荐稀疏协议
+registry = "sparse+https://rsproxy.cn/index/"  # 稀疏协议
 
 [registries.rsproxy]
 index = "https://rsproxy.cn/crates.io-index"
 
 [net]
 git-fetch-with-cli = true  # 强制使用CLI处理git
-
-# 静态编译配置
-[target.x86_64-unknown-linux-musl]
-rustflags = ["-C", "target-feature=+crt-static"]
 EOF
+
+# 安装pip
+RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources
+RUN apt update && apt-get install -y python3-pip
 
 # 安装cargo-chef构建工具（缓存依赖加速构建）
 RUN cargo install cargo-chef --locked
 
-# 设置静态链接环境变量
-ENV PKG_CONFIG_ALL_STATIC=1
-ENV OPENSSL_STATIC=1
+# 安装cargo-zigbuild, pip会同时安装ziglang
+RUN pip install cargo-zigbuild --break-system-packages -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 安装工具链编译目标
+RUN rustup target add x86_64-unknown-linux-musl
 
 # ====== 第二阶段：依赖分析 ======
-FROM chef AS planner
+FROM meta AS planner
 # 复制项目文件（用于生成依赖清单）/可以不完全复制
 COPY . .
 
@@ -43,21 +45,19 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ====== 第三阶段：构建应用 ======
-FROM chef AS builder
+FROM meta AS builder
 
 # 从planner阶段复制依赖清单
 COPY --from=planner /app/recipe.json recipe.json
 
 # 仅构建依赖项（利用Docker层缓存）
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --zigbuild --recipe-path recipe.json --target x86_64-unknown-linux-musl
 
-# 复制全部源代码（依赖变更后才会执行此层）
+# 复制全部源代码
 COPY . .
 
-ENV REPO_PATH=/home/git/repo.git
-# 构建主应用（musl静态链接）
-RUN cargo build --release --target x86_64-unknown-linux-musl
-
+# 构建主应用
+RUN cargo zigbuild --release --target x86_64-unknown-linux-musl
 
 # ====== 第四阶段：运行环境 ======
 # 使用自定义git-ssh镜像运行时
