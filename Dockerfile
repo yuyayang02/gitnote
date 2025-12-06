@@ -1,6 +1,6 @@
 # ====== 第一阶段：构建环境准备 ======
 # 使用带musl工具链的Rust基础镜像
-FROM clux/muslrust:1.91.1-stable AS chef
+FROM clux/muslrust:1.91.1-stable AS meta
 
 # 设置工作目录
 WORKDIR /app
@@ -27,6 +27,9 @@ git-fetch-with-cli = true  # 强制使用CLI处理git
 rustflags = ["-C", "target-feature=+crt-static"]
 EOF
 
+# 设置构建时环境变量
+ENV REPO_PATH=/home/git/repo.git
+
 # 安装cargo-chef构建工具（缓存依赖加速构建）
 RUN cargo install cargo-chef --locked
 
@@ -35,7 +38,7 @@ ENV PKG_CONFIG_ALL_STATIC=1
 ENV OPENSSL_STATIC=1
 
 # ====== 第二阶段：依赖分析 ======
-FROM chef AS planner
+FROM meta AS planner
 # 复制项目文件（用于生成依赖清单）/可以不完全复制
 COPY . .
 
@@ -43,7 +46,7 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ====== 第三阶段：构建应用 ======
-FROM chef AS builder
+FROM meta AS builder
 
 # 从planner阶段复制依赖清单
 COPY --from=planner /app/recipe.json recipe.json
