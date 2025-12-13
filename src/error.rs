@@ -67,8 +67,12 @@ impl IntoResponse for Error {
                     git_client::GitError::Git2(e) => {
                         (StatusCode::INTERNAL_SERVER_ERROR, e.message().to_string())
                     }
-                    git_client::GitError::IO(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-                    git_client::GitError::CommandFailed(s) => (StatusCode::INTERNAL_SERVER_ERROR, s),
+                    git_client::GitError::IO(e) => {
+                        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+                    }
+                    git_client::GitError::CommandFailed(s) => {
+                        (StatusCode::INTERNAL_SERVER_ERROR, s)
+                    }
                 }
                 .into_response()
             }
