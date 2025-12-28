@@ -21,9 +21,9 @@ pub enum Error {
     #[error(transparent)]
     Git(#[from] git_client::GitError),
 
-    /// TOML 解析错误
+    /// YAML 解析错误
     #[error(transparent)]
-    Serde(#[from] toml::de::Error),
+    Serde(#[from] serde_yaml::Error),
 
     /// 自定义错误消息
     #[error("{0}")]
@@ -70,9 +70,6 @@ impl IntoResponse for Error {
                     git_client::GitError::IO(e) => {
                         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
                     }
-                    git_client::GitError::CommandFailed(s) => {
-                        (StatusCode::INTERNAL_SERVER_ERROR, s)
-                    }
                 }
                 .into_response()
             }
@@ -89,7 +86,7 @@ impl IntoResponse for Error {
 
             Error::Custom(s) => (StatusCode::BAD_REQUEST, s.to_string()).into_response(),
 
-            Error::Serde(e) => (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
+            Error::Serde(e) => (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
 
             Error::Io(e) => {
                 tracing::error!(%e, "file io error");

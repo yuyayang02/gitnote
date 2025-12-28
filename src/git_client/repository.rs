@@ -62,7 +62,7 @@ mod tests {
 
     use super::*;
 
-    const LAST_COMMIT_OID: &str = "6496b0ee9ed48d0738b5c3fe0e0b279c260eef35";
+    const LAST_COMMIT_OID: &str = "4db775450dee399c328935eb03fd4fcc6c60e333";
 
     #[test]
     fn test_diff_commits() {

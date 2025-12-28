@@ -122,7 +122,7 @@ async fn test_api() {
     // 同步第一个hash
     {
         app.git_repo_sync(
-            "94c8c92a2cca73ccaf45b961741ce0518b8368f4",
+            "1b931e64cd251b0a98d9216b96ba4c51e69c7797",
             1,
             "提交第一个文件",
         )
@@ -141,7 +141,7 @@ async fn test_api() {
     // 同步第二个hash
     {
         app.git_repo_sync(
-            "6496b0ee9ed48d0738b5c3fe0e0b279c260eef35",
+            "4db775450dee399c328935eb03fd4fcc6c60e333",
             2,
             "提交文件于组策略",
         )

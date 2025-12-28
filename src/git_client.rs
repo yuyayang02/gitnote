@@ -4,7 +4,7 @@ mod operations;
 mod repository;
 
 use self::{
-    entry::{GitFileEntryPrune, IntoGitFileEntry},
+    entry::{ConsolidateFileChanges, IntoGitFileEntry},
     operations::{AsyncGitClient, GitOperation},
 };
 

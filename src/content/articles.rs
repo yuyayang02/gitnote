@@ -93,30 +93,35 @@ impl<T> ArticleBuilder<T> {
 
 impl ArticleBuilder<Content> {
     fn parse_content(&self) -> Result<(FrontMatter, String)> {
-        const DELIM: &str = "+++";
+        let (toml_str, body_str) = Self::extract_front_matter_and_body(&self.content.0)?;
+        let front_matter = Self::parse_front_matter(toml_str)?;
+        Ok((front_matter, body_str.to_string()))
+    }
 
-        let content = self.content.0.trim_start(); // 忽略开头空白
+    /// 从原始 Markdown 内容中提取 Front Matter 字符串和正文。
+    fn extract_front_matter_and_body(content: &str) -> Result<(&str, &str)> {
+        const DELIM: &str = "---";
 
-        // 必须以 front matter 起始
+        let content = content.trim_start();
+
         if !content.starts_with(DELIM) {
-            return Err(Error::Custom("Missing required TOML front matter"));
+            return Err(Error::Custom("Missing required YAML front matter"));
         }
 
-        // 去掉起始标志
         let rest = &content[DELIM.len()..];
-
-        // 找到结束标志的位置
         let end_pos = rest.find(DELIM).ok_or_else(|| {
-            Error::Custom("Front matter does not terminate with expected delimiter +++")
+            Error::Custom("Front matter does not terminate with expected delimiter ---")
         })?;
 
-        // 提取 front matter 和正文
-        let toml_str = &rest[..end_pos];
-        let body = &rest[end_pos + DELIM.len()..];
+        let yaml_str = &rest[..end_pos];
+        let body_str = &rest[end_pos + DELIM.len()..].trim_start();
 
-        let front_matter: FrontMatter = toml::from_str(toml_str.trim())?;
+        Ok((yaml_str.trim(), body_str))
+    }
 
-        Ok((front_matter, body.trim_start().to_string()))
+    /// 解析 YAML 格式的 Front Matter 字符串。
+    fn parse_front_matter(yaml_str: &str) -> Result<FrontMatter> {
+        serde_yaml::from_str(yaml_str).map_err(Into::into)
     }
 
     pub async fn build_with_renderer<R: Renderer>(self, renderer: &R) -> Result<Article> {
@@ -186,12 +191,15 @@ mod tests {
 
     fn sample_markdown() -> String {
         r#"
-+++
-title = "Test Article"
-summary = "This is a test summary."
-datetime = "2024-06-01"
-tags = ["rust", "testing"]
-+++
+---
+title: Test Article
+summary: |
+    This is a test summary.
+
+    This is a test summary too.
+datetime: 2024-06-01
+tags: [ rust, testing ]
+---
 
 # Markdown Content
 
@@ -229,6 +237,13 @@ This is the body of the article.
                 .frontmatter
                 .summary
                 .contains("This is a test summary."),
+            "Summary should include original text"
+        );
+        assert!(
+            article
+                .frontmatter
+                .summary
+                .contains("This is a test summary too."),
             "Summary should include original text"
         );
         assert!(

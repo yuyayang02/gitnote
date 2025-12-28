@@ -43,7 +43,7 @@ pub struct Group {
 
 impl Group {
     pub fn new(id: impl AsRef<Path>, group_content: String) -> Result<Self> {
-        let mut group = toml::from_str::<Group>(&group_content)?;
+        let mut group = serde_yaml::from_str::<Group>(&group_content)?;
 
         let path = id.as_ref();
         let parent = path.parent().unwrap_or(path);
@@ -77,14 +77,14 @@ mod tests {
 
     #[test]
     fn test_group_parsing_normal() {
-        let toml_content = r#"
-              type = "normal"
-              name = "我的分组"
+        let yaml_content = r#"
+              type: normal
+              name: 我的分组
           "#;
 
-        let path = std::path::Path::new("/path/to/.group.toml");
+        let path = std::path::Path::new("/path/to/.group.yaml");
 
-        let group = Group::new(path, toml_content.to_string()).unwrap();
+        let group = Group::new(path, yaml_content.to_string()).unwrap();
 
         // 测试 id 是否正确提取
         assert_eq!(group.id, "path/to");
@@ -95,13 +95,13 @@ mod tests {
 
     #[test]
     fn test_group_default_name() {
-        let toml_content = r#"
-              type = "normal"
+        let yaml_content = r#"
+              type: normal
           "#;
 
-        let path = std::path::Path::new("/path/to/.group.toml");
+        let path = std::path::Path::new("/path/to/.group.yaml");
 
-        let group = Group::new(path, toml_content.to_string()).unwrap();
+        let group = Group::new(path, yaml_content.to_string()).unwrap();
 
         // id 应该提取父目录
         assert_eq!(group.id, "path/to");

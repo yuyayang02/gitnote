@@ -28,7 +28,7 @@ impl FileKind {
     pub(super) fn from_path(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
         if let Some(name) = path.file_name().and_then(|n| n.to_str())
-            && name == ".group.toml"
+            && name == ".group.yaml"
         {
             return FileKind::Group;
         }
@@ -149,11 +149,11 @@ fn merge_change(old: Option<&ChangeKind>, new: ChangeKind) -> Option<ChangeKind>
 /// 定义对一组 [`GitFileEntry`] 进行裁剪的行为。
 ///
 /// 用于在序列中合并或抵消重复的文件变更，得到精简后的最终结果。
-pub trait GitFileEntryPrune {
+pub trait ConsolidateFileChanges {
     fn prune(self) -> Vec<GitFileEntry>;
 }
 
-impl GitFileEntryPrune for Vec<GitFileEntry> {
+impl ConsolidateFileChanges for Vec<GitFileEntry> {
     /// 对变更序列进行裁剪，合并同一路径的连续修改，去掉无效的抵消操作。
     ///
     /// 返回的结果只包含必要的文件变更，便于后续处理。
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_file_kind_from_path() {
-        assert_eq!(FileKind::from_path(".group.toml"), FileKind::Group);
+        assert_eq!(FileKind::from_path(".group.yaml"), FileKind::Group);
         assert_eq!(FileKind::from_path("doc.md"), FileKind::Markdown);
         assert_eq!(FileKind::from_path("notes.markdown"), FileKind::Markdown);
         assert_eq!(FileKind::from_path("image.png"), FileKind::Other);

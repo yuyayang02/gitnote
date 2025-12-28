@@ -4,7 +4,7 @@ use git2::{Oid, Repository, Sort};
 
 use crate::git_client::IntoGitFileEntry;
 
-use super::{GitError, GitFileEntry, GitFileEntryPrune};
+use super::{GitError, GitFileEntry, ConsolidateFileChanges};
 /// 提供对 Git 仓库的常用操作。
 ///
 /// 实现 [`GitOperation`] 可以方便地执行 commit 差异分析、远程更新和文件读取等操作。

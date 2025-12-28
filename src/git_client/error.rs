@@ -24,8 +24,4 @@ pub enum GitError {
     /// 底层 IO 错误
     #[error(transparent)]
     IO(#[from] std::io::Error),
-
-    /// git 命令执行失败
-    #[error("command failed: {0}")]
-    CommandFailed(String),
 }
